@@ -44,19 +44,52 @@ export default function App() {
     loadAuthorAndBooks();
   }, []);
 
+  const defaultAuthor: Author = {
+    id: 'author-1',
+    name: '',
+    credentials: '',
+    bio: '',
+    photo_url: '',
+    created_at: new Date().toISOString(),
+  };
+
   const loadAuthorAndBooks = async () => {
     setIsLoading(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
       const [authorRes, booksRes] = await Promise.all([
-        fetch('/api/author'),
-        fetch('/api/books'),
+        fetch('/api/author', { signal: controller.signal }).catch(() => null),
+        fetch('/api/books', { signal: controller.signal }).catch(() => null),
       ]);
-      const authorData = await authorRes.json();
-      const booksData = await booksRes.json();
-      setAuthor(authorData);
-      setBooks(booksData);
+      clearTimeout(timeoutId);
+
+      if (authorRes && authorRes.ok) {
+        try {
+          const authorData = await authorRes.json();
+          setAuthor(authorData);
+        } catch {
+          setAuthor(defaultAuthor);
+        }
+      } else {
+        setAuthor(defaultAuthor);
+      }
+
+      if (booksRes && booksRes.ok) {
+        try {
+          const booksData = await booksRes.json();
+          setBooks(Array.isArray(booksData) ? booksData : []);
+        } catch {
+          setBooks([]);
+        }
+      } else {
+        setBooks([]);
+      }
     } catch (err) {
       console.error('Failed loading initial data:', err);
+      setAuthor(defaultAuthor);
+      setBooks([]);
     } finally {
       setIsLoading(false);
     }
