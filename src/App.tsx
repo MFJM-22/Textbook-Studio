@@ -9,6 +9,9 @@ import {
   FileDown,
   FileText,
   Search,
+  Lock,
+  LogIn,
+  ShieldAlert,
 } from 'lucide-react';
 import { Author, Book, Page, Week, GlossaryTerm } from './types';
 import { Header } from './components/Header';
@@ -19,8 +22,16 @@ import { OCRViewerModal } from './components/OCRViewerModal';
 import { HumanReviewEditor } from './components/HumanReviewEditor';
 import { GlossaryManager } from './components/GlossaryManager';
 import { PrintPDFPreview } from './components/PrintPDFPreview';
+import { AuthModal } from './components/AuthModal';
+import { useAuth } from './context/AuthContext';
+import {
+  saveBookToFirestore,
+  subscribeToBooks,
+  deleteBookFromFirestore,
+} from './lib/firestoreService';
 
 export default function App() {
+  const { currentUser } = useAuth();
   const [author, setAuthor] = useState<Author | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -36,13 +47,29 @@ export default function App() {
   // Modals state
   const [isAuthorModalOpen, setIsAuthorModalOpen] = useState(false);
   const [isNewBookModalOpen, setIsNewBookModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Initial load
+  // Initial load author info
   useEffect(() => {
-    loadAuthorAndBooks();
+    loadAuthor();
   }, []);
+
+  // Subscribe to user-specific books from Firestore whenever currentUser changes
+  useEffect(() => {
+    if (currentUser) {
+      setIsLoading(true);
+      const unsubscribe = subscribeToBooks(currentUser.uid, (userBooks) => {
+        setBooks(userBooks);
+        setIsLoading(false);
+      });
+      return () => unsubscribe();
+    } else {
+      // If not logged in, attempt API load as fallback or reset
+      loadFallbackBooks();
+    }
+  }, [currentUser]);
 
   const defaultAuthor: Author = {
     id: 'author-1',
@@ -53,16 +80,11 @@ export default function App() {
     created_at: new Date().toISOString(),
   };
 
-  const loadAuthorAndBooks = async () => {
-    setIsLoading(true);
+  const loadAuthor = async () => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-      const [authorRes, booksRes] = await Promise.all([
-        fetch('/api/author', { signal: controller.signal }).catch(() => null),
-        fetch('/api/books', { signal: controller.signal }).catch(() => null),
-      ]);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const authorRes = await fetch('/api/author', { signal: controller.signal }).catch(() => null);
       clearTimeout(timeoutId);
 
       if (authorRes && authorRes.ok) {
@@ -75,6 +97,18 @@ export default function App() {
       } else {
         setAuthor(defaultAuthor);
       }
+    } catch {
+      setAuthor(defaultAuthor);
+    }
+  };
+
+  const loadFallbackBooks = async () => {
+    setIsLoading(true);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const booksRes = await fetch('/api/books', { signal: controller.signal }).catch(() => null);
+      clearTimeout(timeoutId);
 
       if (booksRes && booksRes.ok) {
         try {
@@ -86,9 +120,7 @@ export default function App() {
       } else {
         setBooks([]);
       }
-    } catch (err) {
-      console.error('Failed loading initial data:', err);
-      setAuthor(defaultAuthor);
+    } catch {
       setBooks([]);
     } finally {
       setIsLoading(false);
@@ -138,6 +170,11 @@ export default function App() {
     sample_id?: string;
     uploaded_files?: { image_data?: string; raw_text?: string }[];
   }) => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const res = await fetch('/api/books', {
@@ -146,7 +183,15 @@ export default function App() {
         body: JSON.stringify(bookData),
       });
       if (!res.ok) throw new Error(`Book creation failed with status ${res.status}`);
-      const newBook = await res.json();
+      const newBook: Book = await res.json();
+
+      // Associate with current user ID in Firestore
+      const userBook: Book = {
+        ...newBook,
+        userId: currentUser.uid,
+      };
+
+      await saveBookToFirestore(userBook, currentUser.uid);
 
       // Upload files if custom files provided
       if (bookData.uploaded_files && bookData.uploaded_files.length > 0) {
@@ -157,8 +202,7 @@ export default function App() {
         });
       }
 
-      await loadAuthorAndBooks();
-      await handleOpenOCRView(newBook);
+      await handleOpenOCRView(userBook);
     } catch (err) {
       console.error('Error creating book:', err);
     } finally {
@@ -171,6 +215,9 @@ export default function App() {
     if (!confirm('Are you sure you want to delete this textbook project?')) return;
     try {
       await fetch(`/api/books/${bookId}`, { method: 'DELETE' });
+      if (currentUser) {
+        await deleteBookFromFirestore(bookId);
+      }
       setBooks((prev) => prev.filter((b) => b.id !== bookId));
     } catch (err) {
       console.error('Error deleting book:', err);
@@ -311,7 +358,7 @@ export default function App() {
       });
       const data = await res.json();
       if (data.glossary) setGlossary(data.glossary);
-      await loadAuthorAndBooks();
+      await loadAuthor();
       setCurrentView('glossary');
     } catch (err) {
       console.error('Error approving structure:', err);
@@ -380,7 +427,7 @@ export default function App() {
       a.remove();
       window.URL.revokeObjectURL(url);
 
-      await loadAuthorAndBooks();
+      await loadAuthor();
     } catch (err) {
       console.error('DOCX Export error:', err);
       alert('Failed to generate Word document.');
@@ -450,12 +497,50 @@ export default function App() {
       <Header
         author={author}
         onOpenAuthorProfile={() => setIsAuthorModalOpen(true)}
-        onNewBook={() => setIsNewBookModalOpen(true)}
-        onLoadSample={() => setIsNewBookModalOpen(true)}
+        onNewBook={() => {
+          if (!currentUser) {
+            setIsAuthModalOpen(true);
+          } else {
+            setIsNewBookModalOpen(true);
+          }
+        }}
+        onLoadSample={() => {
+          if (!currentUser) {
+            setIsAuthModalOpen(true);
+          } else {
+            setIsNewBookModalOpen(true);
+          }
+        }}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
       />
 
       {/* Main Teacher Dashboard */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {!currentUser && (
+          <div className="p-4 bg-gradient-to-r from-blue-950/60 via-slate-900 to-indigo-950 border border-blue-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  Multi-User Account Protection Active
+                </h4>
+                <p className="text-xs text-slate-400">
+                  Sign in or create an account to store and access your textbook projects securely under your account.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsAuthModalOpen(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl shadow-md flex items-center gap-1.5 shrink-0"
+            >
+              <LogIn className="w-4 h-4" />
+              Sign In / Sign Up
+            </button>
+          </div>
+        )}
+
         {/* Banner Hero */}
         <div className="bg-gradient-to-r from-blue-900/80 via-slate-900 to-indigo-950 p-6 sm:p-8 rounded-3xl border border-blue-800/40 shadow-xl relative overflow-hidden">
           <div className="relative z-10 max-w-2xl space-y-3">
@@ -472,7 +557,13 @@ export default function App() {
 
             <div className="pt-2 flex flex-wrap gap-3">
               <button
-                onClick={() => setIsNewBookModalOpen(true)}
+                onClick={() => {
+                  if (!currentUser) {
+                    setIsAuthModalOpen(true);
+                  } else {
+                    setIsNewBookModalOpen(true);
+                  }
+                }}
                 id="hero-create-btn"
                 className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 transition-all"
               >
@@ -492,7 +583,9 @@ export default function App() {
                 Textbook Projects ({books.length})
               </h3>
               <p className="text-xs text-slate-400">
-                Manage lesson notes, review curriculum structures, and generate Word exports.
+                {currentUser
+                  ? `Private projects for ${currentUser.email}`
+                  : 'Manage lesson notes, review curriculum structures, and generate Word exports.'}
               </p>
             </div>
 
@@ -518,10 +611,18 @@ export default function App() {
               <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
               <h4 className="text-sm font-bold text-slate-300">No textbook projects found</h4>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Create a new project by uploading scanned notes or entering custom outlines to start publishing textbooks.
+                {currentUser
+                  ? 'You haven’t created any projects under your account yet. Create your first project to begin.'
+                  : 'Create a new project by uploading scanned notes or entering custom outlines to start publishing textbooks.'}
               </p>
               <button
-                onClick={() => setIsNewBookModalOpen(true)}
+                onClick={() => {
+                  if (!currentUser) {
+                    setIsAuthModalOpen(true);
+                  } else {
+                    setIsNewBookModalOpen(true);
+                  }
+                }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg"
               >
                 Create First Textbook
@@ -545,6 +646,12 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* Auth Login/Signup Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
 
       {/* Author Profile Modal */}
       <AuthorProfileModal

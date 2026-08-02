@@ -19,6 +19,7 @@ export interface Book {
   status: BookStatus;
   created_at: string;
   pages_count?: number;
+  userId?: string;
 }
 
 export interface Page {
