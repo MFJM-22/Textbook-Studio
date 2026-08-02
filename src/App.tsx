@@ -25,6 +25,7 @@ import { PrintPDFPreview } from './components/PrintPDFPreview';
 import { AuthModal } from './components/AuthModal';
 import { LandingPage } from './components/LandingPage';
 import { Footer } from './components/Footer';
+import { generateBookDocxBlob } from './lib/docGenerator';
 import { useAuth } from './context/AuthContext';
 import {
   saveBookToFirestore,
@@ -466,9 +467,33 @@ export default function App() {
       const res = await fetch(`/api/books/${targetBook.id}/generate-docx`, {
         method: 'POST',
       });
-      if (!res.ok) throw new Error('Export failed');
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${targetBook.title.replace(/[^a-zA-Z0-9_\-]/g, '_')}.docx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        await loadAuthor();
+        return;
+      }
+      console.warn('Server DOCX generation returned non-200, switching to client-side fallback generation...');
+    } catch (err) {
+      console.warn('Server DOCX export error, falling back to client-side docx builder:', err);
+    }
 
-      const blob = await res.blob();
+    // Client-side fallback generation
+    try {
+      setIsLoading(true);
+      const details = await fetchBookDetails(targetBook.id);
+      const exportWeeks = details?.weeks || weeks || [];
+      const exportGlossary = details?.glossary || glossary || [];
+      const safeAuthor = author || { id: '1', name: 'Curriculum Author', credentials: 'B.Ed', bio: 'Textbook author.' };
+
+      const blob = await generateBookDocxBlob(targetBook, safeAuthor, exportWeeks, exportGlossary);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -477,11 +502,11 @@ export default function App() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-
-      await loadAuthor();
-    } catch (err) {
-      console.error('DOCX Export error:', err);
-      alert('Failed to generate Word document.');
+    } catch (clientErr) {
+      console.error('Client-side DOCX export error:', clientErr);
+      alert('Unable to generate Word document. Please try again or check note contents.');
+    } finally {
+      setIsLoading(false);
     }
   };
 

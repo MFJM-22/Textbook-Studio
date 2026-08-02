@@ -31,18 +31,23 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
     }
     setIsGeneratingPdf(true);
     try {
+      const html2pdfRunner = (html2pdf as any).default || html2pdf;
       const opt = {
-        margin: [0.4, 0.4, 0.4, 0.4] as [number, number, number, number],
+        margin: [0.3, 0.4, 0.3, 0.4] as [number, number, number, number],
         filename: `${(book.title || 'Textbook').replace(/[^a-z0-9]/gi, '_')}.pdf`,
         image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const },
         pagebreak: { mode: ['css', 'legacy'] },
       };
-      await html2pdf().set(opt).from(element).save();
+      await html2pdfRunner().set(opt).from(element).save();
     } catch (err) {
       console.error('PDF generation error, falling back to window.print:', err);
-      window.print();
+      try {
+        window.print();
+      } catch (printErr) {
+        alert('Browser print blocked. Please use Chrome/Safari print dialog to save as PDF.');
+      }
     } finally {
       setIsGeneratingPdf(false);
     }

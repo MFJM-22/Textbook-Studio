@@ -20,7 +20,7 @@ export function parseMarkdownTable(text: string): {
   headers: string[];
   rows: string[][];
 } | null {
-  if (!text) return null;
+  if (!text || typeof text !== 'string') return null;
   const lines = text.trim().split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
   const tableLines = lines.filter((l) => l.startsWith('|') && (l.endsWith('|') || l.includes('|', 1)));
   if (tableLines.length < 2) return null;
@@ -33,6 +33,8 @@ export function parseMarkdownTable(text: string): {
   };
 
   const headers = parseRow(tableLines[0]);
+  if (!headers || headers.length === 0) return null;
+
   const rows: string[][] = [];
 
   for (let i = 1; i < tableLines.length; i++) {
@@ -50,9 +52,18 @@ export function parseMarkdownTable(text: string): {
   return { headers, rows };
 }
 
-export function normalizeContentSections(sections: any[]): any[] {
-  if (!Array.isArray(sections)) return [];
-  return sections.map((sec) => {
+export function normalizeContentSections(sections: any): any[] {
+  let list = sections;
+  if (typeof sections === 'string') {
+    try {
+      list = JSON.parse(sections);
+    } catch {
+      list = [];
+    }
+  }
+  if (!Array.isArray(list)) return [];
+
+  return list.map((sec) => {
     let paragraphs: string[] = Array.isArray(sec.paragraphs) ? [...sec.paragraphs] : [];
 
     // 1. If sec.table exists, convert to Markdown table string if not already present in paragraphs
@@ -107,19 +118,24 @@ export function normalizeContentSections(sections: any[]): any[] {
 }
 
 export function createDocxTable(tableData: { headers: string[]; rows: string[][] }): Table {
+  const headers = tableData?.headers || ['Header 1'];
+  const rows = tableData?.rows || [];
+  const colCount = Math.max(1, headers.length);
+  const colWidth = Math.max(1, Math.floor(100 / colCount));
+
   const headerRow = new TableRow({
     tableHeader: true,
-    children: tableData.headers.map(
+    children: headers.map(
       (headerText) =>
         new TableCell({
           children: [
             new Paragraph({
-              children: [new TextRun({ text: headerText, bold: true, color: '1E293B' })],
+              children: [new TextRun({ text: headerText || '', bold: true, color: '1E293B' })],
               alignment: AlignmentType.LEFT,
             }),
           ],
           shading: { fill: 'F1F5F9' },
-          width: { size: Math.floor(100 / tableData.headers.length), type: WidthType.PERCENTAGE },
+          width: { size: colWidth, type: WidthType.PERCENTAGE },
           borders: {
             top: { style: BorderStyle.SINGLE, size: 1, color: 'CBD5E1' },
             bottom: { style: BorderStyle.SINGLE, size: 2, color: '94A3B8' },
@@ -130,27 +146,27 @@ export function createDocxTable(tableData: { headers: string[]; rows: string[][]
     ),
   });
 
-  const bodyRows = tableData.rows.map(
+  const bodyRows = rows.map(
     (row, rowIndex) =>
       new TableRow({
-        children: row.map(
-          (cellText) =>
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [new TextRun({ text: cellText, color: '334155' })],
-                }),
-              ],
-              shading: { fill: rowIndex % 2 === 0 ? 'FFFFFF' : 'F8FAFC' },
-              width: { size: Math.floor(100 / tableData.headers.length), type: WidthType.PERCENTAGE },
-              borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
-              },
-            })
-        ),
+        children: headers.map((_, colIndex) => {
+          const cellText = row[colIndex] || '';
+          return new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: cellText, color: '334155' })],
+              }),
+            ],
+            shading: { fill: rowIndex % 2 === 0 ? 'FFFFFF' : 'F8FAFC' },
+            width: { size: colWidth, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+              bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+              left: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+              right: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+            },
+          });
+        }),
       })
   );
 
@@ -160,13 +176,21 @@ export function createDocxTable(tableData: { headers: string[]; rows: string[][]
   });
 }
 
-export async function generateBookDocx(
+export function buildDocxDocument(
   book: Book,
   author: Author,
   weeks: Week[],
   glossary: GlossaryTerm[]
-): Promise<Buffer> {
+): Document {
   const sectionsChildren: (Paragraph | Table)[] = [];
+
+  const safeTitle = book?.title || 'Textbook';
+  const safeSubject = book?.subject || 'General';
+  const safeClass = book?.class_level || 'Grade Level';
+  const safeTerm = book?.term || 'Term';
+  const safeAuthorName = author?.name || 'Author Name';
+  const safeCredentials = author?.credentials || 'Educator';
+  const safeBio = author?.bio || 'Curriculum developer and teacher.';
 
   // --- COVER PAGE ---
   sectionsChildren.push(
@@ -174,9 +198,9 @@ export async function generateBookDocx(
     new Paragraph({
       children: [
         new TextRun({
-          text: book.title.toUpperCase(),
+          text: safeTitle.toUpperCase(),
           bold: true,
-          size: 52, // 26pt
+          size: 52,
           color: '0F172A',
         }),
       ],
@@ -186,7 +210,7 @@ export async function generateBookDocx(
     new Paragraph({
       children: [
         new TextRun({
-          text: `${book.subject} • ${book.class_level} • ${book.term}`,
+          text: `${safeSubject} • ${safeClass} • ${safeTerm}`,
           size: 28,
           color: '2563EB',
           bold: true,
@@ -210,7 +234,7 @@ export async function generateBookDocx(
     new Paragraph({
       children: [
         new TextRun({
-          text: author.name,
+          text: safeAuthorName,
           size: 32,
           bold: true,
           color: '1E293B',
@@ -221,7 +245,7 @@ export async function generateBookDocx(
     new Paragraph({
       children: [
         new TextRun({
-          text: author.credentials,
+          text: safeCredentials,
           size: 22,
           color: '475569',
         }),
@@ -230,7 +254,7 @@ export async function generateBookDocx(
       spacing: { after: 2000 },
     }),
     new Paragraph({
-      children: [new PageBreak()]
+      children: [new PageBreak()],
     })
   );
 
@@ -242,19 +266,19 @@ export async function generateBookDocx(
       spacing: { before: 400, after: 300 },
     }),
     new Paragraph({
-      children: [new TextRun({ text: author.name, bold: true, size: 28, color: '0F172A' })],
+      children: [new TextRun({ text: safeAuthorName, bold: true, size: 28, color: '0F172A' })],
       spacing: { after: 100 },
     }),
     new Paragraph({
-      children: [new TextRun({ text: author.credentials, italics: true, color: '2563EB', size: 22 })],
+      children: [new TextRun({ text: safeCredentials, italics: true, color: '2563EB', size: 22 })],
       spacing: { after: 300 },
     }),
     new Paragraph({
-      children: [new TextRun({ text: author.bio, size: 24, color: '334155' })],
+      children: [new TextRun({ text: safeBio, size: 24, color: '334155' })],
       spacing: { after: 600 },
     }),
     new Paragraph({
-      children: [new PageBreak()]
+      children: [new PageBreak()],
     })
   );
 
@@ -267,19 +291,21 @@ export async function generateBookDocx(
     })
   );
 
-  weeks.forEach((w) => {
+  const safeWeeks = weeks || [];
+  safeWeeks.forEach((w) => {
     sectionsChildren.push(
       new Paragraph({
         children: [
           new TextRun({ text: `Week ${w.week_number}: `, bold: true, color: '2563EB' }),
-          new TextRun({ text: w.topic, bold: true, color: '0F172A' }),
+          new TextRun({ text: w.topic || '', bold: true, color: '0F172A' }),
         ],
         spacing: { after: 150 },
       })
     );
   });
 
-  if (glossary.length > 0) {
+  const safeGlossary = glossary || [];
+  if (safeGlossary.length > 0) {
     sectionsChildren.push(
       new Paragraph({
         children: [
@@ -292,12 +318,12 @@ export async function generateBookDocx(
 
   sectionsChildren.push(
     new Paragraph({
-      children: [new PageBreak()]
+      children: [new PageBreak()],
     })
   );
 
   // --- WEEKS CONTENT ---
-  weeks.forEach((week) => {
+  safeWeeks.forEach((week) => {
     sectionsChildren.push(
       new Paragraph({
         children: [
@@ -311,58 +337,56 @@ export async function generateBookDocx(
         spacing: { before: 200, after: 100 },
       }),
       new Paragraph({
-        text: week.topic,
+        text: week.topic || '',
         heading: HeadingLevel.HEADING_1,
         spacing: { after: 400 },
       })
     );
 
-    if (Array.isArray(week.content_json)) {
-      week.content_json.forEach((sec) => {
-        if (sec.subheading) {
-          sectionsChildren.push(
-            new Paragraph({
-              text: sec.subheading,
-              heading: HeadingLevel.HEADING_2,
-              spacing: { before: 300, after: 200 },
-            })
-          );
-        }
+    const normSections = normalizeContentSections(week.content_json);
+    normSections.forEach((sec) => {
+      if (sec.subheading) {
+        sectionsChildren.push(
+          new Paragraph({
+            text: sec.subheading,
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 300, after: 200 },
+          })
+        );
+      }
 
-        if (Array.isArray(sec.paragraphs)) {
-          sec.paragraphs.forEach((pText) => {
-            // Check if paragraph is markdown table
-            const tableData = parseMarkdownTable(pText);
-            if (tableData) {
-              sectionsChildren.push(createDocxTable(tableData));
-              sectionsChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
-            } else {
-              sectionsChildren.push(
-                new Paragraph({
-                  children: [new TextRun({ text: pText, size: 24, color: '334155' })],
-                  spacing: { after: 200 },
-                })
-              );
-            }
-          });
-        }
+      if (Array.isArray(sec.paragraphs)) {
+        sec.paragraphs.forEach((pText: string) => {
+          const tableData = parseMarkdownTable(pText);
+          if (tableData) {
+            sectionsChildren.push(createDocxTable(tableData));
+            sectionsChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+          } else {
+            sectionsChildren.push(
+              new Paragraph({
+                children: [new TextRun({ text: pText || '', size: 24, color: '334155' })],
+                spacing: { after: 200 },
+              })
+            );
+          }
+        });
+      }
 
-        if (sec.table) {
-          sectionsChildren.push(createDocxTable(sec.table));
-          sectionsChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
-        }
-      });
-    }
+      if (sec.table) {
+        sectionsChildren.push(createDocxTable(sec.table));
+        sectionsChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+      }
+    });
 
     sectionsChildren.push(
       new Paragraph({
-        children: [new PageBreak()]
+        children: [new PageBreak()],
       })
     );
   });
 
   // --- GLOSSARY SECTION ---
-  if (glossary.length > 0) {
+  if (safeGlossary.length > 0) {
     sectionsChildren.push(
       new Paragraph({
         text: 'Glossary',
@@ -371,14 +395,14 @@ export async function generateBookDocx(
       })
     );
 
-    const sortedGlossary = [...glossary].sort((a, b) => a.term.localeCompare(b.term));
+    const sortedGlossary = [...safeGlossary].sort((a, b) => (a.term || '').localeCompare(b.term || ''));
 
     sortedGlossary.forEach((item) => {
       sectionsChildren.push(
         new Paragraph({
           children: [
-            new TextRun({ text: `${item.term}: `, bold: true, color: '0F172A', size: 24 }),
-            new TextRun({ text: item.definition, color: '334155', size: 24 }),
+            new TextRun({ text: `${item.term || ''}: `, bold: true, color: '0F172A', size: 24 }),
+            new TextRun({ text: item.definition || '', color: '334155', size: 24 }),
           ],
           spacing: { after: 200 },
         })
@@ -386,7 +410,7 @@ export async function generateBookDocx(
     });
   }
 
-  const doc = new Document({
+  return new Document({
     sections: [
       {
         footers: {
@@ -394,7 +418,7 @@ export async function generateBookDocx(
             children: [
               new Paragraph({
                 children: [
-                  new TextRun({ text: `${book.title} | Page ` }),
+                  new TextRun({ text: `${safeTitle} | Page ` }),
                   new TextRun({
                     children: [PageNumber.CURRENT],
                   }),
@@ -408,6 +432,24 @@ export async function generateBookDocx(
       },
     ],
   });
+}
 
+export async function generateBookDocx(
+  book: Book,
+  author: Author,
+  weeks: Week[],
+  glossary: GlossaryTerm[]
+): Promise<Buffer> {
+  const doc = buildDocxDocument(book, author, weeks, glossary);
   return await Packer.toBuffer(doc);
+}
+
+export async function generateBookDocxBlob(
+  book: Book,
+  author: Author,
+  weeks: Week[],
+  glossary: GlossaryTerm[]
+): Promise<Blob> {
+  const doc = buildDocxDocument(book, author, weeks, glossary);
+  return await Packer.toBlob(doc);
 }
