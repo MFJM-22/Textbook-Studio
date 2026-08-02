@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global catch-all deny default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Primitives
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Validation helpers
+    function isValidBook(data) {
+      return data.keys().hasAll(['id', 'title', 'subject', 'userId'])
+        && data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() <= 200
+        && data.subject is string && data.subject.size() <= 100
+        && data.userId is string && data.userId.size() <= 128;
+    }
+
+    function isValidWeek(data) {
+      return data.keys().hasAll(['id', 'book_id', 'week_number', 'topic'])
+        && data.id is string && data.id.size() <= 128
+        && data.book_id is string && data.book_id.size() <= 128
+        && data.week_number is number
+        && data.topic is string && data.topic.size() <= 300;
+    }
+
+    match /books/{bookId} {
+      allow get: if isSignedIn() && isValidId(bookId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(bookId) && isValidBook(incoming()) && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(bookId) && isValidBook(incoming()) && existing().userId == request.auth.uid && incoming().userId == request.auth.uid;
+      allow delete: if isSignedIn() && isValidId(bookId) && existing().userId == request.auth.uid;
+
+      match /weeks/{weekId} {
+        allow get: if isSignedIn() && isValidId(bookId) && isValidId(weekId) && get(/databases/$(database)/documents/books/$(bookId)).data.userId == request.auth.uid;
+        allow list: if isSignedIn() && isValidId(bookId) && get(/databases/$(database)/documents/books/$(bookId)).data.userId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(bookId) && isValidId(weekId) && isValidWeek(incoming()) && get(/databases/$(database)/documents/books/$(bookId)).data.userId == request.auth.uid;
+        allow update: if isSignedIn() && isValidId(bookId) && isValidId(weekId) && isValidWeek(incoming()) && get(/databases/$(database)/documents/books/$(bookId)).data.userId == request.auth.uid;
+        allow delete: if isSignedIn() && isValidId(bookId) && isValidId(weekId) && get(/databases/$(database)/documents/books/$(bookId)).data.userId == request.auth.uid;
+      }
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "Book": {
+      "title": "Book",
+      "description": "Represents a textbook project",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "author_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "subject": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "class_level": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "term": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "status": {
+          "type": "string",
+          "enum": ["uploading", "ocr_processing", "awaiting_review", "reviewed", "generated"]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "title", "subject", "userId"]
+    },
+    "Week": {
+      "title": "Week",
+      "description": "Represents a weekly module content of a textbook",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "book_id": {
+          "type": "string"
+        },
+        "week_number": {
+          "type": "number"
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "created_at": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "book_id", "week_number", "topic"]
+    }
+  },
+  "firestore": {
+    "/books/{bookId}": {
+      "schema": {
+        "$ref": "#/entities/Book"
+      },
+      "description": "User created textbooks"
+    },
+    "/books/{bookId}/weeks/{weekId}": {
+      "schema": {
+        "$ref": "#/entities/Week"
+      },
+      "description": "Weekly modules for a textbook"
+    }
+  }
+}
