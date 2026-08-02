@@ -210,7 +210,7 @@ app.post('/api/books/:id/upload-pages', async (req, res) => {
         }
 
         const response = await ai.models.generateContent({
-          model: 'gemini-3.6-flash',
+          model: 'gemini-2.5-flash',
           contents: contentInput,
         });
 
@@ -259,7 +259,7 @@ app.post('/api/books/:id/re-ocr-page', async (req, res) => {
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
       contents: contentInput,
     });
 
@@ -299,7 +299,7 @@ Structure the extracted notes into an array of Weeks. Each Week must have:
 Return strictly valid JSON corresponding to this schema.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
       contents: `Raw Notes Source Material:\n${combinedRawNotes}`,
       config: {
         systemInstruction: systemPrompt,
@@ -443,7 +443,7 @@ app.post('/api/books/:id/approve-structure', async (req, res) => {
     const prompt = `Extract a list of 5 to 15 key technical terms, vocabulary words, and concepts with clear concise definitions from the following textbook material:\n\n${textContent}`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',

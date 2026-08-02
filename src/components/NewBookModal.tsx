@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Sparkles, BookOpen, Check, FileText } from 'lucide-react';
+import { X, Upload, Sparkles, BookOpen, Check, FileText, Loader2, AlertCircle } from 'lucide-react';
 import { SampleNote } from '../types';
 
 interface NewBookModalProps {
@@ -12,7 +12,7 @@ interface NewBookModalProps {
     term: string;
     sample_id?: string;
     uploaded_files?: { image_data?: string; raw_text?: string }[];
-  }) => void;
+  }) => Promise<void> | void;
 }
 
 export const NewBookModal: React.FC<NewBookModalProps> = ({
@@ -23,17 +23,21 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
   const [activeTab, setActiveTab] = useState<'sample' | 'custom'>('custom');
   const [samples, setSamples] = useState<SampleNote[]>([]);
   const [selectedSampleId, setSelectedSampleId] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Custom fields
   const [title, setTitle] = useState('');
-  const [subject, setSubject] = useState('Biology');
-  const [classLevel, setClassLevel] = useState('Grade 9');
-  const [term, setTerm] = useState('1st Term');
+  const [subject, setSubject] = useState('Integrated Science');
+  const [classLevel, setClassLevel] = useState('JSS 2');
+  const [term, setTerm] = useState('2nd Term');
   const [customTextNotes, setCustomTextNotes] = useState('');
   const [uploadedImages, setUploadedImages] = useState<{ image_data: string }[]>([]);
 
   useEffect(() => {
     if (isOpen) {
+      setError(null);
+      setIsSubmitting(false);
       fetch('/api/sample-notes')
         .then((res) => res.json())
         .then((data) => {
@@ -64,39 +68,47 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
 
-    if (activeTab === 'sample') {
-      const selectedSample = samples.find((s) => s.id === selectedSampleId);
-      onCreateBook({
-        title: title || selectedSample?.title || 'New Textbook',
-        subject: selectedSample?.subject || subject,
-        class_level: selectedSample?.class_level || classLevel,
-        term: selectedSample?.term || term,
-        sample_id: selectedSampleId,
-      });
-    } else {
-      const pagesToUpload: { image_data?: string; raw_text?: string }[] = [];
+    try {
+      if (activeTab === 'sample') {
+        const selectedSample = samples.find((s) => s.id === selectedSampleId);
+        await onCreateBook({
+          title: title || selectedSample?.title || 'New Textbook',
+          subject: selectedSample?.subject || subject,
+          class_level: selectedSample?.class_level || classLevel,
+          term: selectedSample?.term || term,
+          sample_id: selectedSampleId,
+        });
+      } else {
+        const pagesToUpload: { image_data?: string; raw_text?: string }[] = [];
 
-      if (uploadedImages.length > 0) {
-        uploadedImages.forEach((img) => pagesToUpload.push({ image_data: img.image_data }));
+        if (uploadedImages.length > 0) {
+          uploadedImages.forEach((img) => pagesToUpload.push({ image_data: img.image_data }));
+        }
+
+        if (customTextNotes.trim().length > 0) {
+          pagesToUpload.push({ raw_text: customTextNotes });
+        }
+
+        await onCreateBook({
+          title: title || `${subject} ${classLevel} Textbook`,
+          subject,
+          class_level: classLevel,
+          term,
+          uploaded_files: pagesToUpload,
+        });
       }
-
-      if (customTextNotes.trim().length > 0) {
-        pagesToUpload.push({ raw_text: customTextNotes });
-      }
-
-      onCreateBook({
-        title: title || `${subject} ${classLevel} Textbook`,
-        subject,
-        class_level: classLevel,
-        term,
-        uploaded_files: pagesToUpload,
-      });
+      onClose();
+    } catch (err: any) {
+      console.error('Submission error:', err);
+      setError(err?.message || 'Failed to create project. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onClose();
   };
 
   return (
@@ -280,21 +292,39 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
             </div>
           )}
 
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+              <span>{error}</span>
+            </div>
+          )}
+
           <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={onClose}
-              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50"
+              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
+              disabled={isSubmitting}
               id="confirm-create-book-btn"
-              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-500 shadow-sm"
+              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-500 shadow-sm disabled:opacity-50"
             >
-              <BookOpen className="w-4 h-4" />
-              Create & Process Notes
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Processing Notes & OCR...</span>
+                </>
+              ) : (
+                <>
+                  <BookOpen className="w-4 h-4" />
+                  <span>Create & Process Notes</span>
+                </>
+              )}
             </button>
           </div>
         </form>

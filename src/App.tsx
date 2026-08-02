@@ -70,7 +70,8 @@ export default function App() {
       });
       return () => unsubscribe();
     } else {
-      // If not logged in, attempt API load as fallback or reset
+      // If not logged in (signed out), return to landing page
+      setShowLandingPage(true);
       loadFallbackBooks();
     }
   }, [currentUser]);
@@ -181,34 +182,51 @@ export default function App() {
 
     setIsLoading(true);
     try {
+      // Omit uploaded_files from initial book creation request to avoid massive JSON payload
+      const { uploaded_files, ...metaData } = bookData;
+
       const res = await fetch('/api/books', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bookData),
+        body: JSON.stringify(metaData),
       });
       if (!res.ok) throw new Error(`Book creation failed with status ${res.status}`);
       const newBook: Book = await res.json();
 
-      // Associate with current user ID in Firestore
+      // Associate with current user ID
       const userBook: Book = {
         ...newBook,
         userId: currentUser.uid,
       };
 
-      await saveBookToFirestore(userBook, currentUser.uid);
+      // Update local state immediately
+      setBooks((prev) => [userBook, ...prev.filter((b) => b.id !== userBook.id)]);
 
-      // Upload files if custom files provided
-      if (bookData.uploaded_files && bookData.uploaded_files.length > 0) {
-        await fetch(`/api/books/${newBook.id}/upload-pages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pages: bookData.uploaded_files }),
-        });
+      // Attempt Firestore save
+      try {
+        await saveBookToFirestore(userBook, currentUser.uid);
+      } catch (fsErr) {
+        console.warn('Firestore persistence warning:', fsErr);
       }
 
+      // Upload pages if custom files/text provided
+      if (uploaded_files && uploaded_files.length > 0) {
+        const uploadRes = await fetch(`/api/books/${newBook.id}/upload-pages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pages: uploaded_files }),
+        });
+        if (!uploadRes.ok) {
+          console.warn('Pages upload HTTP status:', uploadRes.status);
+        }
+      }
+
+      setIsNewBookModalOpen(false);
+      setShowLandingPage(false);
       await handleOpenOCRView(userBook);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating book:', err);
+      throw err;
     } finally {
       setIsLoading(false);
     }

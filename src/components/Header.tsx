@@ -45,35 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center Nav Pills - only shown when inside Textbook Projects view */}
-        {!showLandingPage && (
-          <div className="hidden md:flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-            <button
-              onClick={() => onToggleLandingPage(true)}
-              className="px-3.5 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white"
-            >
-              Overview & Features
-            </button>
-            <button
-              onClick={() => onToggleLandingPage(false)}
-              className="px-3.5 py-1.5 rounded-lg font-medium transition-all bg-blue-600 text-white shadow-sm"
-            >
-              My Textbook Projects
-            </button>
-          </div>
-        )}
-
         {/* Right Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-auto">
-          {/* Mobile view switch */}
-          {!showLandingPage && (
-            <button
-              onClick={() => onToggleLandingPage(true)}
-              className="md:hidden px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-slate-300 hover:text-white"
-            >
-              Overview
-            </button>
-          )}
 
           {currentUser ? (
             <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-800/80 border border-slate-700/80 rounded-xl px-2.5 py-1">
