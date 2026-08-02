@@ -85,42 +85,47 @@ app.get('/api/books', (req, res) => {
 });
 
 app.post('/api/books', (req, res) => {
-  const { title, subject, class_level, term, sample_id } = req.body;
-  const newBook: Book = {
-    id: `book-${Date.now()}`,
-    author_id: currentAuthor.id,
-    title: title || `${subject || 'General'} Textbook`,
-    subject: subject || 'Science',
-    class_level: class_level || 'Grade 9',
-    term: term || '1st Term',
-    status: 'uploading',
-    created_at: new Date().toISOString(),
-    pages_count: 0,
-  };
+  try {
+    const { title, subject, class_level, term, sample_id } = req.body || {};
+    const newBook: Book = {
+      id: `book-${Date.now()}`,
+      author_id: currentAuthor.id,
+      title: title || `${subject || 'General'} Textbook`,
+      subject: subject || 'Science',
+      class_level: class_level || 'Grade 9',
+      term: term || '1st Term',
+      status: 'uploading',
+      created_at: new Date().toISOString(),
+      pages_count: 0,
+    };
 
-  booksStore.unshift(newBook);
+    booksStore.unshift(newBook);
 
-  // If created from sample notes dataset
-  if (sample_id) {
-    const sample = sampleNotesData.find((s) => s.id === sample_id);
-    if (sample) {
-      sample.sample_pages.forEach((sp, idx) => {
-        pagesStore.push({
-          id: `p-${Date.now()}-${idx}`,
-          book_id: newBook.id,
-          page_order: sp.page_order,
-          image_url: sp.image_url,
-          raw_ocr_text: sp.raw_text,
-          ocr_confidence: 0.98,
-          status: 'completed',
-          created_at: new Date().toISOString(),
+    // If created from sample notes dataset
+    if (sample_id && Array.isArray(sampleNotesData)) {
+      const sample = sampleNotesData.find((s) => s.id === sample_id);
+      if (sample) {
+        sample.sample_pages.forEach((sp, idx) => {
+          pagesStore.push({
+            id: `p-${Date.now()}-${idx}`,
+            book_id: newBook.id,
+            page_order: sp.page_order,
+            image_url: sp.image_url,
+            raw_ocr_text: sp.raw_text,
+            ocr_confidence: 0.98,
+            status: 'completed',
+            created_at: new Date().toISOString(),
+          });
         });
-      });
-      newBook.status = 'ocr_processing';
+        newBook.status = 'ocr_processing';
+      }
     }
-  }
 
-  res.status(201).json(newBook);
+    res.status(201).json(newBook);
+  } catch (err: any) {
+    console.error('Error in POST /api/books:', err);
+    res.status(500).json({ error: err?.message || 'Failed to create book' });
+  }
 });
 
 app.get('/api/books/:id', (req, res) => {
