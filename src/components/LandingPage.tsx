@@ -133,14 +133,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <span>Create Textbook Free</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
-
-              <button
-                onClick={onLoadSample}
-                className="w-full sm:w-auto px-6 py-3.5 bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold text-sm rounded-2xl border border-slate-700 hover:border-slate-600 transition-all flex items-center justify-center gap-2"
-              >
-                <Play className="w-4 h-4 text-purple-400 fill-purple-400/20" />
-                <span>Load Sample Curriculum</span>
-              </button>
             </div>
 
             {/* Small Trust Micro-Badge */}

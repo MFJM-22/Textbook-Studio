@@ -45,7 +45,7 @@ export const Footer: React.FC<FooterProps> = ({ onGetStarted, onOpenAuth }) => {
           </div>
 
           {/* Quick Links */}
-          <div className="md:col-span-2 space-y-3">
+          <div className="md:col-span-3 space-y-3">
             <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Product Features</h4>
             <ul className="space-y-2 text-xs">
               <li><a href="#features" className="hover:text-white transition-colors">OCR Vision Scan</a></li>
@@ -57,7 +57,7 @@ export const Footer: React.FC<FooterProps> = ({ onGetStarted, onOpenAuth }) => {
           </div>
 
           {/* Workflow */}
-          <div className="md:col-span-2 space-y-3">
+          <div className="md:col-span-4 space-y-3">
             <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Publishing Pipeline</h4>
             <ul className="space-y-2 text-xs">
               <li><a href="#workflow" className="hover:text-white transition-colors">1. Upload Teacher Notes</a></li>
@@ -65,30 +65,6 @@ export const Footer: React.FC<FooterProps> = ({ onGetStarted, onOpenAuth }) => {
               <li><a href="#workflow" className="hover:text-white transition-colors">3. Review Weekly Modules</a></li>
               <li><a href="#workflow" className="hover:text-white transition-colors">4. Export for Print & Web</a></li>
             </ul>
-          </div>
-
-          {/* Get Started CTA box */}
-          <div className="md:col-span-3 space-y-3 bg-gradient-to-br from-blue-950/40 to-indigo-950/40 border border-blue-900/40 p-5 rounded-2xl">
-            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Start Publishing Today
-            </h4>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              Join educators worldwide. Create your personal library and manage all your textbook projects securely.
-            </p>
-            <div className="pt-1 flex flex-col gap-2">
-              <button
-                onClick={onGetStarted}
-                className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-md transition-all text-center"
-              >
-                Create First Textbook
-              </button>
-              <button
-                onClick={onOpenAuth}
-                className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs rounded-xl border border-slate-700 transition-colors text-center"
-              >
-                Sign In / Sign Up
-              </button>
-            </div>
           </div>
 
         </div>
