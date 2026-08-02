@@ -23,6 +23,8 @@ import { HumanReviewEditor } from './components/HumanReviewEditor';
 import { GlossaryManager } from './components/GlossaryManager';
 import { PrintPDFPreview } from './components/PrintPDFPreview';
 import { AuthModal } from './components/AuthModal';
+import { LandingPage } from './components/LandingPage';
+import { Footer } from './components/Footer';
 import { useAuth } from './context/AuthContext';
 import {
   saveBookToFirestore,
@@ -43,6 +45,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<
     'dashboard' | 'ocr' | 'review' | 'glossary' | 'print'
   >('dashboard');
+  const [showLandingPage, setShowLandingPage] = useState<boolean>(true);
 
   // Modals state
   const [isAuthorModalOpen, setIsAuthorModalOpen] = useState(false);
@@ -496,11 +499,14 @@ export default function App() {
       {/* Header */}
       <Header
         author={author}
+        showLandingPage={showLandingPage}
+        onToggleLandingPage={(show) => setShowLandingPage(show)}
         onOpenAuthorProfile={() => setIsAuthorModalOpen(true)}
         onNewBook={() => {
           if (!currentUser) {
             setIsAuthModalOpen(true);
           } else {
+            setShowLandingPage(false);
             setIsNewBookModalOpen(true);
           }
         }}
@@ -508,144 +514,181 @@ export default function App() {
           if (!currentUser) {
             setIsAuthModalOpen(true);
           } else {
+            setShowLandingPage(false);
             setIsNewBookModalOpen(true);
           }
         }}
         onOpenAuth={() => setIsAuthModalOpen(true)}
       />
 
-      {/* Main Teacher Dashboard */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {!currentUser && (
-          <div className="p-4 bg-gradient-to-r from-blue-950/60 via-slate-900 to-indigo-950 border border-blue-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
-                <Lock className="w-5 h-5" />
+      {/* Hero Landing Page View */}
+      {showLandingPage ? (
+        <LandingPage
+          onGetStarted={() => {
+            if (!currentUser) {
+              setIsAuthModalOpen(true);
+            } else {
+              setShowLandingPage(false);
+              setIsNewBookModalOpen(true);
+            }
+          }}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+          onLoadSample={() => {
+            if (!currentUser) {
+              setIsAuthModalOpen(true);
+            } else {
+              setShowLandingPage(false);
+              setIsNewBookModalOpen(true);
+            }
+          }}
+        />
+      ) : (
+        /* Main Teacher Dashboard */
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          {!currentUser && (
+            <div className="p-4 bg-gradient-to-r from-blue-950/60 via-slate-900 to-indigo-950 border border-blue-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    Multi-User Account Protection Active
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Sign in or create an account to store and access your textbook projects securely under your account.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  Multi-User Account Protection Active
-                </h4>
-                <p className="text-xs text-slate-400">
-                  Sign in or create an account to store and access your textbook projects securely under your account.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl shadow-md flex items-center gap-1.5 shrink-0"
-            >
-              <LogIn className="w-4 h-4" />
-              Sign In / Sign Up
-            </button>
-          </div>
-        )}
-
-        {/* Banner Hero */}
-        <div className="bg-gradient-to-r from-blue-900/80 via-slate-900 to-indigo-950 p-6 sm:p-8 rounded-3xl border border-blue-800/40 shadow-xl relative overflow-hidden">
-          <div className="relative z-10 max-w-2xl space-y-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              Gemini Vision OCR & Structured Word Export
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Transform Scanned Teacher Notes into Publish-Ready Textbooks
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Upload handwritten or typed lesson outlines. Textbook Studio extracts text with multimodal AI, organizes week-by-week units with native table support, generates glossaries, and exports formatted Word (.docx) & PDF documents.
-            </p>
-
-            <div className="pt-2 flex flex-wrap gap-3">
               <button
-                onClick={() => {
-                  if (!currentUser) {
-                    setIsAuthModalOpen(true);
-                  } else {
-                    setIsNewBookModalOpen(true);
-                  }
-                }}
-                id="hero-create-btn"
-                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 transition-all"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl shadow-md flex items-center gap-1.5 shrink-0"
               >
-                <Plus className="w-4 h-4" />
-                New Textbook Project
+                <LogIn className="w-4 h-4" />
+                Sign In / Sign Up
               </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Dashboard Content */}
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-blue-400" />
-                Textbook Projects ({books.length})
-              </h3>
-              <p className="text-xs text-slate-400">
-                {currentUser
-                  ? `Private projects for ${currentUser.email}`
-                  : 'Manage lesson notes, review curriculum structures, and generate Word exports.'}
-              </p>
-            </div>
-
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search subject or class..."
-                className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="py-16 text-center text-slate-400 flex flex-col items-center gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-              <span className="text-xs">Loading textbook projects...</span>
-            </div>
-          ) : filteredBooks.length === 0 ? (
-            <div className="p-12 text-center bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
-              <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
-              <h4 className="text-sm font-bold text-slate-300">No textbook projects found</h4>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                {currentUser
-                  ? 'You haven’t created any projects under your account yet. Create your first project to begin.'
-                  : 'Create a new project by uploading scanned notes or entering custom outlines to start publishing textbooks.'}
-              </p>
-              <button
-                onClick={() => {
-                  if (!currentUser) {
-                    setIsAuthModalOpen(true);
-                  } else {
-                    setIsNewBookModalOpen(true);
-                  }
-                }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg"
-              >
-                Create First Textbook
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredBooks.map((book) => (
-                <BookCard
-                  key={book.id}
-                  book={book}
-                  onReview={() => handleOpenReviewView(book)}
-                  onViewPages={() => handleOpenOCRView(book)}
-                  onGlossary={() => handleOpenGlossaryView(book)}
-                  onExportDocx={() => handleExportDocx(book)}
-                  onPrintPreview={() => handleOpenPrintView(book)}
-                  onDelete={handleDeleteBook}
-                />
-              ))}
             </div>
           )}
-        </div>
-      </main>
+
+          {/* Banner Hero */}
+          <div className="bg-gradient-to-r from-blue-900/80 via-slate-900 to-indigo-950 p-6 sm:p-8 rounded-3xl border border-blue-800/40 shadow-xl relative overflow-hidden">
+            <div className="relative z-10 max-w-2xl space-y-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                Gemini Vision OCR & Structured Word Export
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                Transform Scanned Teacher Notes into Publish-Ready Textbooks
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Upload handwritten or typed lesson outlines. Textbook Studio extracts text with multimodal AI, organizes week-by-week units with native table support, generates glossaries, and exports formatted Word (.docx) & PDF documents.
+              </p>
+
+              <div className="pt-2 flex flex-wrap gap-3">
+                <button
+                  onClick={() => {
+                    if (!currentUser) {
+                      setIsAuthModalOpen(true);
+                    } else {
+                      setIsNewBookModalOpen(true);
+                    }
+                  }}
+                  id="hero-create-btn"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Textbook Project
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Dashboard Content */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-blue-400" />
+                  Textbook Projects ({books.length})
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {currentUser
+                    ? `Private projects for ${currentUser.email}`
+                    : 'Manage lesson notes, review curriculum structures, and generate Word exports.'}
+                </p>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search subject or class..."
+                  className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {isLoading ? (
+              <div className="py-16 text-center text-slate-400 flex flex-col items-center gap-2">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                <span className="text-xs">Loading textbook projects...</span>
+              </div>
+            ) : filteredBooks.length === 0 ? (
+              <div className="p-12 text-center bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
+                <h4 className="text-sm font-bold text-slate-300">No textbook projects found</h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  {currentUser
+                    ? 'You haven’t created any projects under your account yet. Create your first project to begin.'
+                    : 'Create a new project by uploading scanned notes or entering custom outlines to start publishing textbooks.'}
+                </p>
+                <button
+                  onClick={() => {
+                    if (!currentUser) {
+                      setIsAuthModalOpen(true);
+                    } else {
+                      setIsNewBookModalOpen(true);
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg"
+                >
+                  Create First Textbook
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredBooks.map((book) => (
+                  <BookCard
+                    key={book.id}
+                    book={book}
+                    onReview={() => handleOpenReviewView(book)}
+                    onViewPages={() => handleOpenOCRView(book)}
+                    onGlossary={() => handleOpenGlossaryView(book)}
+                    onExportDocx={() => handleExportDocx(book)}
+                    onPrintPreview={() => handleOpenPrintView(book)}
+                    onDelete={handleDeleteBook}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </main>
+      )}
+
+      {/* Universal Footer */}
+      <Footer
+        onGetStarted={() => {
+          if (!currentUser) {
+            setIsAuthModalOpen(true);
+          } else {
+            setShowLandingPage(false);
+            setIsNewBookModalOpen(true);
+          }
+        }}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+      />
 
       {/* Auth Login/Signup Modal */}
       <AuthModal

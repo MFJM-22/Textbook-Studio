@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Mail, Lock, Eye, EyeOff, LogIn, UserPlus, AlertCircle, ShieldCheck } from 'lucide-react';
+import { BookOpen, Mail, Lock, Eye, EyeOff, LogIn, UserPlus, AlertCircle, ShieldCheck, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface AuthModalProps {
@@ -79,8 +79,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-slate-100">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) onClose();
+      }}
+    >
+      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-slate-100 relative">
+        {/* Close Button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            type="button"
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition-colors z-10"
+            title="Close / Cancel"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
         
         {/* Header */}
         <div className="p-6 text-center border-b border-slate-800/80 bg-slate-900/50">
