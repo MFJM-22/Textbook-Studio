@@ -26,7 +26,6 @@ export const Footer: React.FC<FooterProps> = ({ onGetStarted, onOpenAuth }) => {
                     AI v2.0
                   </span>
                 </span>
-                <p className="text-xs text-slate-400">Automated Teacher Notes to Published Textbook</p>
               </div>
             </div>
 

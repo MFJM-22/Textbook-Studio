@@ -51,7 +51,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     } catch (err: any) {
       console.error('Auth error:', err);
       let msg = err?.message || 'Authentication failed.';
-      if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
+      if (msg.includes('auth/operation-not-allowed')) {
+        msg = 'Email/Password authentication is disabled in Firebase Console. Please use "Sign in with Google" below or enable Email/Password provider in your Firebase project.';
+      } else if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
         msg = 'Invalid email or password.';
       } else if (msg.includes('auth/email-already-in-use')) {
         msg = 'An account with this email already exists. Try signing in instead.';
@@ -75,7 +77,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
       if (onClose) onClose();
     } catch (err: any) {
       console.error('Google auth error:', err);
-      setError(err?.message || 'Failed to sign in with Google.');
+      let msg = err?.message || 'Failed to sign in with Google.';
+      if (msg.includes('auth/operation-not-allowed')) {
+        msg = 'Google Sign-In is disabled in Firebase Console. Please enable Google provider in your Firebase authentication settings.';
+      } else if (msg.includes('auth/popup-closed-by-user')) {
+        msg = 'Sign-in window was closed before completing.';
+      }
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }
