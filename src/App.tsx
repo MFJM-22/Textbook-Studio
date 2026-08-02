@@ -1,0 +1,546 @@
+import React, { useState, useEffect } from 'react';
+import {
+  BookOpen,
+  Plus,
+  Sparkles,
+  BookMarked,
+  User,
+  Loader2,
+  FileDown,
+  FileText,
+  Search,
+} from 'lucide-react';
+import { Author, Book, Page, Week, GlossaryTerm } from './types';
+import { Header } from './components/Header';
+import { AuthorProfileModal } from './components/AuthorProfileModal';
+import { BookCard } from './components/BookCard';
+import { NewBookModal } from './components/NewBookModal';
+import { OCRViewerModal } from './components/OCRViewerModal';
+import { HumanReviewEditor } from './components/HumanReviewEditor';
+import { GlossaryManager } from './components/GlossaryManager';
+import { PrintPDFPreview } from './components/PrintPDFPreview';
+
+export default function App() {
+  const [author, setAuthor] = useState<Author | null>(null);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [pages, setPages] = useState<Page[]>([]);
+  const [weeks, setWeeks] = useState<Week[]>([]);
+  const [glossary, setGlossary] = useState<GlossaryTerm[]>([]);
+
+  // Navigation state
+  const [currentView, setCurrentView] = useState<
+    'dashboard' | 'ocr' | 'review' | 'glossary' | 'print'
+  >('dashboard');
+
+  // Modals state
+  const [isAuthorModalOpen, setIsAuthorModalOpen] = useState(false);
+  const [isNewBookModalOpen, setIsNewBookModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Initial load
+  useEffect(() => {
+    loadAuthorAndBooks();
+  }, []);
+
+  const loadAuthorAndBooks = async () => {
+    setIsLoading(true);
+    try {
+      const [authorRes, booksRes] = await Promise.all([
+        fetch('/api/author'),
+        fetch('/api/books'),
+      ]);
+      const authorData = await authorRes.json();
+      const booksData = await booksRes.json();
+      setAuthor(authorData);
+      setBooks(booksData);
+    } catch (err) {
+      console.error('Failed loading initial data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchBookDetails = async (bookId: string) => {
+    try {
+      const res = await fetch(`/api/books/${bookId}`);
+      if (!res.ok) {
+        console.error(`Failed to fetch book ${bookId}: HTTP status ${res.status}`);
+        return null;
+      }
+      const data = await res.json();
+      setSelectedBook(data);
+      setPages(data.pages || []);
+      setWeeks(data.weeks || []);
+      setGlossary(data.glossary || []);
+      return data;
+    } catch (err) {
+      console.error('Error fetching book details:', err);
+      return null;
+    }
+  };
+
+  // Author Profile Update
+  const handleSaveAuthor = async (updated: Partial<Author>) => {
+    try {
+      const res = await fetch('/api/author', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      const data = await res.json();
+      setAuthor(data);
+    } catch (err) {
+      console.error('Error updating author profile:', err);
+    }
+  };
+
+  // Create New Book
+  const handleCreateBook = async (bookData: {
+    title: string;
+    subject: string;
+    class_level: string;
+    term: string;
+    sample_id?: string;
+    uploaded_files?: { image_data?: string; raw_text?: string }[];
+  }) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookData),
+      });
+      if (!res.ok) throw new Error(`Book creation failed with status ${res.status}`);
+      const newBook = await res.json();
+
+      // Upload files if custom files provided
+      if (bookData.uploaded_files && bookData.uploaded_files.length > 0) {
+        await fetch(`/api/books/${newBook.id}/upload-pages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pages: bookData.uploaded_files }),
+        });
+      }
+
+      await loadAuthorAndBooks();
+      await handleOpenOCRView(newBook);
+    } catch (err) {
+      console.error('Error creating book:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Delete Book
+  const handleDeleteBook = async (bookId: string) => {
+    if (!confirm('Are you sure you want to delete this textbook project?')) return;
+    try {
+      await fetch(`/api/books/${bookId}`, { method: 'DELETE' });
+      setBooks((prev) => prev.filter((b) => b.id !== bookId));
+    } catch (err) {
+      console.error('Error deleting book:', err);
+    }
+  };
+
+  // Open Views
+  const handleOpenOCRView = async (book: Book) => {
+    setIsLoading(true);
+    try {
+      const details = await fetchBookDetails(book.id);
+      if (details) setCurrentView('ocr');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenReviewView = async (book: Book) => {
+    setIsLoading(true);
+    try {
+      const details = await fetchBookDetails(book.id);
+      if (!details) {
+        setIsLoading(false);
+        return;
+      }
+
+      // If weeks not structured yet, call AI structuring
+      if (!details.weeks || details.weeks.length === 0) {
+        try {
+          const structRes = await fetch(`/api/books/${book.id}/structure`, {
+            method: 'POST',
+          });
+          if (structRes.ok) {
+            const structData = await structRes.json();
+            if (structData.weeks) {
+              setWeeks(structData.weeks);
+            }
+          }
+        } catch (err) {
+          console.error('Error structuring book:', err);
+        }
+      }
+      setCurrentView('review');
+    } catch (err) {
+      console.error('Error opening review view:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenGlossaryView = async (book: Book) => {
+    setIsLoading(true);
+    try {
+      const details = await fetchBookDetails(book.id);
+      if (details) setCurrentView('glossary');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenPrintView = async (book: Book) => {
+    setIsLoading(true);
+    try {
+      const details = await fetchBookDetails(book.id);
+      if (details) setCurrentView('print');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Page level OCR updates
+  const handleUpdatePageText = async (pageId: string, text: string) => {
+    if (!selectedBook) return;
+    try {
+      const res = await fetch(`/api/books/${selectedBook.id}/re-ocr-page`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page_id: pageId, updated_text: text }),
+      });
+      const updatedPage = await res.json();
+      setPages((prev) => prev.map((p) => (p.id === pageId ? updatedPage : p)));
+    } catch (err) {
+      console.error('Error updating page text:', err);
+    }
+  };
+
+  const handleReOCRPage = async (pageId: string) => {
+    if (!selectedBook) return;
+    try {
+      const res = await fetch(`/api/books/${selectedBook.id}/re-ocr-page`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page_id: pageId }),
+      });
+      const updatedPage = await res.json();
+      setPages((prev) => prev.map((p) => (p.id === pageId ? updatedPage : p)));
+    } catch (err) {
+      console.error('Error re-running OCR:', err);
+    }
+  };
+
+  const handleUploadMorePages = async (files: { image_data?: string }[]) => {
+    if (!selectedBook) return;
+    try {
+      const res = await fetch(`/api/books/${selectedBook.id}/upload-pages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pages: files }),
+      });
+      const data = await res.json();
+      await fetchBookDetails(selectedBook.id);
+    } catch (err) {
+      console.error('Error uploading more pages:', err);
+    }
+  };
+
+  // Human Review Actions
+  const handleSaveWeeks = async (updatedWeeks: Week[]) => {
+    if (!selectedBook) return;
+    try {
+      const res = await fetch(`/api/books/${selectedBook.id}/weeks`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weeks: updatedWeeks }),
+      });
+      const data = await res.json();
+      setWeeks(data.weeks || updatedWeeks);
+    } catch (err) {
+      console.error('Error saving weeks:', err);
+    }
+  };
+
+  const handleApproveAndContinue = async () => {
+    if (!selectedBook) return;
+    try {
+      const res = await fetch(`/api/books/${selectedBook.id}/approve-structure`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.glossary) setGlossary(data.glossary);
+      await loadAuthorAndBooks();
+      setCurrentView('glossary');
+    } catch (err) {
+      console.error('Error approving structure:', err);
+    }
+  };
+
+  // Glossary Actions
+  const handleAddGlossaryTerm = async (term: string, definition: string) => {
+    if (!selectedBook) return;
+    try {
+      const res = await fetch(`/api/books/${selectedBook.id}/glossary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ term, definition }),
+      });
+      const newTerm = await res.json();
+      setGlossary((prev) => [...prev, newTerm]);
+    } catch (err) {
+      console.error('Error adding term:', err);
+    }
+  };
+
+  const handleUpdateGlossaryTerm = async (id: string, term: string, definition: string) => {
+    if (!selectedBook) return;
+    try {
+      const res = await fetch(`/api/books/${selectedBook.id}/glossary/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ term, definition }),
+      });
+      const updated = await res.json();
+      setGlossary((prev) => prev.map((g) => (g.id === id ? updated : g)));
+    } catch (err) {
+      console.error('Error updating term:', err);
+    }
+  };
+
+  const handleDeleteGlossaryTerm = async (id: string) => {
+    if (!selectedBook) return;
+    try {
+      await fetch(`/api/books/${selectedBook.id}/glossary/${id}`, { method: 'DELETE' });
+      setGlossary((prev) => prev.filter((g) => g.id !== id));
+    } catch (err) {
+      console.error('Error deleting term:', err);
+    }
+  };
+
+  // DOCX Export Download
+  const handleExportDocx = async (book?: Book) => {
+    const targetBook = book || selectedBook;
+    if (!targetBook) return;
+
+    try {
+      const res = await fetch(`/api/books/${targetBook.id}/generate-docx`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error('Export failed');
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${targetBook.title.replace(/[^a-zA-Z0-9_\-]/g, '_')}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      await loadAuthorAndBooks();
+    } catch (err) {
+      console.error('DOCX Export error:', err);
+      alert('Failed to generate Word document.');
+    }
+  };
+
+  if (!author) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  // Render Fullscreen Views
+  if (currentView === 'review' && selectedBook) {
+    return (
+      <HumanReviewEditor
+        book={selectedBook}
+        weeks={weeks}
+        onBack={() => setCurrentView('dashboard')}
+        onSaveWeeks={handleSaveWeeks}
+        onApproveAndContinue={handleApproveAndContinue}
+      />
+    );
+  }
+
+  if (currentView === 'glossary' && selectedBook) {
+    return (
+      <GlossaryManager
+        book={selectedBook}
+        glossary={glossary}
+        onBack={() => setCurrentView('dashboard')}
+        onAddTerm={handleAddGlossaryTerm}
+        onUpdateTerm={handleUpdateGlossaryTerm}
+        onDeleteTerm={handleDeleteGlossaryTerm}
+        onReGenerate={async () => {
+          await handleApproveAndContinue();
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'print' && selectedBook) {
+    return (
+      <PrintPDFPreview
+        book={selectedBook}
+        author={author}
+        weeks={weeks}
+        glossary={glossary}
+        onBack={() => setCurrentView('dashboard')}
+        onExportDocx={() => handleExportDocx(selectedBook)}
+      />
+    );
+  }
+
+  const filteredBooks = books.filter(
+    (b) =>
+      b.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.class_level.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+      {/* Header */}
+      <Header
+        author={author}
+        onOpenAuthorProfile={() => setIsAuthorModalOpen(true)}
+        onNewBook={() => setIsNewBookModalOpen(true)}
+        onLoadSample={() => setIsNewBookModalOpen(true)}
+      />
+
+      {/* Main Teacher Dashboard */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Banner Hero */}
+        <div className="bg-gradient-to-r from-blue-900/80 via-slate-900 to-indigo-950 p-6 sm:p-8 rounded-3xl border border-blue-800/40 shadow-xl relative overflow-hidden">
+          <div className="relative z-10 max-w-2xl space-y-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              Gemini Vision OCR & Structured Word Export
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+              Transform Scanned Teacher Notes into Publish-Ready Textbooks
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Upload handwritten or typed lesson outlines. Textbook Studio extracts text with multimodal AI, organizes week-by-week units with native table support, generates glossaries, and exports formatted Word (.docx) & PDF documents.
+            </p>
+
+            <div className="pt-2 flex flex-wrap gap-3">
+              <button
+                onClick={() => setIsNewBookModalOpen(true)}
+                id="hero-create-btn"
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                New Textbook Project
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Dashboard Content */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-blue-400" />
+                Textbook Projects ({books.length})
+              </h3>
+              <p className="text-xs text-slate-400">
+                Manage lesson notes, review curriculum structures, and generate Word exports.
+              </p>
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search subject or class..."
+                className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="py-16 text-center text-slate-400 flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+              <span className="text-xs">Loading textbook projects...</span>
+            </div>
+          ) : filteredBooks.length === 0 ? (
+            <div className="p-12 text-center bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+              <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
+              <h4 className="text-sm font-bold text-slate-300">No textbook projects found</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Create a new project by uploading scanned notes or entering custom outlines to start publishing textbooks.
+              </p>
+              <button
+                onClick={() => setIsNewBookModalOpen(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg"
+              >
+                Create First Textbook
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredBooks.map((book) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  onReview={() => handleOpenReviewView(book)}
+                  onViewPages={() => handleOpenOCRView(book)}
+                  onGlossary={() => handleOpenGlossaryView(book)}
+                  onExportDocx={() => handleExportDocx(book)}
+                  onPrintPreview={() => handleOpenPrintView(book)}
+                  onDelete={handleDeleteBook}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Author Profile Modal */}
+      <AuthorProfileModal
+        author={author}
+        isOpen={isAuthorModalOpen}
+        onClose={() => setIsAuthorModalOpen(false)}
+        onSave={handleSaveAuthor}
+      />
+
+      {/* New Book Creation Wizard Modal */}
+      <NewBookModal
+        isOpen={isNewBookModalOpen}
+        onClose={() => setIsNewBookModalOpen(false)}
+        onCreateBook={handleCreateBook}
+      />
+
+      {/* OCR Page Viewer Modal */}
+      {selectedBook && currentView === 'ocr' && (
+        <OCRViewerModal
+          book={selectedBook}
+          pages={pages}
+          isOpen={true}
+          onClose={() => setCurrentView('dashboard')}
+          onUpdatePageText={handleUpdatePageText}
+          onReOCR={handleReOCRPage}
+          onUploadMorePages={handleUploadMorePages}
+          onProceedToStructure={() => handleOpenReviewView(selectedBook)}
+        />
+      )}
+    </div>
+  );
+}

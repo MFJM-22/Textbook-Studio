@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@layer base {
+  input,
+  textarea,
+  select {
+    color: inherit;
+  }
+
+  /* Force light background inputs inside light container cards to have explicit dark text */
+  .bg-white input,
+  .bg-white textarea,
+  .bg-white select {
+    color: #0f172a;
+  }
+
+  .bg-slate-50 input,
+  .bg-slate-50 textarea,
+  .bg-slate-50 select {
+    color: #0f172a;
+  }
+}

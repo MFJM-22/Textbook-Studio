@@ -1,0 +1,6 @@
+{
+  "name": "Textbook Studio",
+  "description": "Automated textbook generator from handwritten or typed notes with AI OCR, structured week-by-week curriculum review, glossary generation, and DOCX/PDF export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
