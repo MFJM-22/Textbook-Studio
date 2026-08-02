@@ -5,9 +5,10 @@ import { useAuth } from '../context/AuthContext';
 interface AuthModalProps {
   isOpen: boolean;
   onClose?: () => void;
+  onSuccess?: () => void;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { login, signup, loginWithGoogle } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -45,6 +46,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       } else {
         await login(email, password);
       }
+      if (onSuccess) onSuccess();
       if (onClose) onClose();
     } catch (err: any) {
       console.error('Auth error:', err);
@@ -69,6 +71,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setIsSubmitting(true);
     try {
       await loginWithGoogle();
+      if (onSuccess) onSuccess();
       if (onClose) onClose();
     } catch (err: any) {
       console.error('Google auth error:', err);

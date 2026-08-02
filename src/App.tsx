@@ -63,6 +63,7 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       setIsLoading(true);
+      setShowLandingPage(false);
       const unsubscribe = subscribeToBooks(currentUser.uid, (userBooks) => {
         setBooks(userBooks);
         setIsLoading(false);
@@ -694,6 +695,10 @@ export default function App() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={() => {
+          setIsAuthModalOpen(false);
+          setShowLandingPage(false);
+        }}
       />
 
       {/* Author Profile Modal */}
