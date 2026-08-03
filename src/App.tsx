@@ -343,16 +343,18 @@ export default function App() {
     }
   };
 
-  const handleOpenReviewView = async (book: Book) => {
+  const handleOpenReviewView = async (book: Book, customPages?: Page[]) => {
     setIsLoading(true);
     setSelectedBook(book);
     try {
       const details = await fetchBookDetails(book.id);
-      let currentWeeks = details?.weeks || weeks || [];
-      const pagesToUse = (pages && pages.length > 0) ? pages : (details?.pages || []);
+      let currentWeeks = (details?.weeks && details.weeks.length > 0) ? details.weeks : (weeks || []);
+      const pagesToUse = (customPages && customPages.length > 0)
+        ? customPages
+        : ((pages && pages.length > 0) ? pages : (details?.pages || []));
 
-      // Always re-structure if weeks is empty
-      if (currentWeeks.length === 0) {
+      // Re-structure if weeks is empty OR customPages explicitly provided
+      if (!currentWeeks || currentWeeks.length === 0 || (customPages && customPages.length > 0)) {
         try {
           const structRes = await fetch(`/api/books/${book.id}/structure`, {
             method: 'POST',
@@ -363,15 +365,13 @@ export default function App() {
             const structData = await structRes.json();
             if (structData.weeks && structData.weeks.length > 0) {
               currentWeeks = structData.weeks;
-              setWeeks(currentWeeks);
             }
           }
         } catch (err) {
           console.error('Error structuring book:', err);
         }
-      } else {
-        setWeeks(currentWeeks);
       }
+      setWeeks(currentWeeks || []);
     } catch (err) {
       console.error('Error opening review view:', err);
     } finally {
@@ -904,7 +904,7 @@ export default function App() {
           onUpdatePageText={handleUpdatePageText}
           onReOCR={handleReOCRPage}
           onUploadMorePages={handleUploadMorePages}
-          onProceedToStructure={() => handleOpenReviewView(selectedBook)}
+          onProceedToStructure={(pagesToStruct) => handleOpenReviewView(selectedBook, pagesToStruct)}
         />
       )}
     </div>

@@ -25,7 +25,7 @@ interface OCRViewerModalProps {
   onUpdatePageText: (pageId: string, text: string) => Promise<void>;
   onReOCR: (pageId: string) => Promise<void>;
   onUploadMorePages: (files: { image_data?: string; raw_text?: string }[]) => Promise<void>;
-  onProceedToStructure: () => void;
+  onProceedToStructure: (pagesToStructure?: Page[]) => void | Promise<void>;
 }
 
 export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
@@ -44,6 +44,7 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [isReOCRing, setIsReOCRing] = useState<boolean>(false);
   const [isUploadingMore, setIsUploadingMore] = useState<boolean>(false);
+  const [isStructuring, setIsStructuring] = useState<boolean>(false);
   const [showAddTextInput, setShowAddTextInput] = useState<boolean>(false);
   const [newCustomNotes, setNewCustomNotes] = useState<string>('');
   const [zoomLevel, setZoomLevel] = useState<number>(100);
@@ -188,12 +189,20 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
 
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             <button
-              onClick={onProceedToStructure}
+              onClick={async () => {
+                setIsStructuring(true);
+                try {
+                  await onProceedToStructure(pages);
+                } finally {
+                  setIsStructuring(false);
+                }
+              }}
+              disabled={isStructuring}
               id="proceed-to-structuring-btn"
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-600/20 transition-all min-h-[38px]"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-600/20 transition-all min-h-[38px] disabled:opacity-50"
             >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>Proceed to AI Structuring &rarr;</span>
+              {isStructuring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-300" />}
+              <span>{isStructuring ? 'Structuring with Gemini AI...' : 'Proceed to AI Structuring →'}</span>
             </button>
             <button
               onClick={onClose}
