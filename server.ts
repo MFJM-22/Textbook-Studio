@@ -231,12 +231,10 @@ app.post('/api/books/:id/upload-pages', async (req, res) => {
           const mimeType = base64Parts[0].match(/:(.*?);/)?.[1] || 'image/png';
           const base64Data = base64Parts[1];
 
-          contentInput = {
-            parts: [
-              { inlineData: { mimeType, data: base64Data } },
-              { text: promptText },
-            ],
-          };
+          contentInput = [
+            { inlineData: { mimeType, data: base64Data } },
+            { text: promptText },
+          ];
         }
 
         const response = await ai.models.generateContent({
@@ -283,9 +281,10 @@ app.post('/api/books/:id/re-ocr-page', async (req, res) => {
       const base64Parts = page.image_url.split(',');
       const mimeType = base64Parts[0].match(/:(.*?);/)?.[1] || 'image/png';
       const base64Data = base64Parts[1];
-      contentInput = {
-        parts: [{ inlineData: { mimeType, data: base64Data } }, { text: promptText }],
-      };
+      contentInput = [
+        { inlineData: { mimeType, data: base64Data } },
+        { text: promptText },
+      ];
     }
 
     const response = await ai.models.generateContent({

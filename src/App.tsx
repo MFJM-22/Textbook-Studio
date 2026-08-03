@@ -240,20 +240,36 @@ export default function App() {
       }
 
       // Upload pages if custom files/text provided
+      let createdPages: Page[] = [];
       if (uploaded_files && uploaded_files.length > 0) {
-        const uploadRes = await fetch(`/api/books/${newBook.id}/upload-pages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pages: uploaded_files }),
-        });
-        if (!uploadRes.ok) {
-          console.warn('Pages upload HTTP status:', uploadRes.status);
+        try {
+          const uploadRes = await fetch(`/api/books/${userBook.id}/upload-pages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pages: uploaded_files }),
+          });
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            if (uploadData.pages && uploadData.pages.length > 0) {
+              createdPages = uploadData.pages;
+            }
+          } else {
+            console.warn('Pages upload HTTP status:', uploadRes.status);
+          }
+        } catch (uploadErr) {
+          console.error('Error uploading pages:', uploadErr);
         }
       }
 
       setIsNewBookModalOpen(false);
       setShowLandingPage(false);
-      await handleOpenOCRView(userBook);
+      setSelectedBook(userBook);
+      if (createdPages.length > 0) {
+        setPages(createdPages);
+        setCurrentView('ocr');
+      } else {
+        await handleOpenOCRView(userBook);
+      }
     } catch (err: any) {
       console.error('Error creating book:', err);
       throw err;

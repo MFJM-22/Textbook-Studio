@@ -50,22 +50,56 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    (Array.from(files) as File[]).forEach((file: File) => {
+  const compressImage = (file: File, maxWidth = 1600, maxHeight = 1600, quality = 0.85): Promise<string> => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setUploadedImages((prev) => [
-            ...prev,
-            { image_data: event.target!.result as string },
-          ]);
-        }
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } else {
+            resolve(e.target?.result as string);
+          }
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
       };
+      reader.onerror = () => resolve('');
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    for (const file of Array.from(files) as File[]) {
+      try {
+        const compressedData = await compressImage(file);
+        if (compressedData) {
+          setUploadedImages((prev) => [...prev, { image_data: compressedData }]);
+        }
+      } catch (err) {
+        console.error('Error compressing uploaded image:', err);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

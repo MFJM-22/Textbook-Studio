@@ -91,6 +91,42 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
     }
   };
 
+  const compressImage = (file: File, maxWidth = 1600, maxHeight = 1600, quality = 0.85): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } else {
+            resolve(e.target?.result as string);
+          }
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleAddMoreFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -99,14 +135,10 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
     try {
       const fileList: { image_data: string }[] = [];
       for (const f of Array.from(files) as File[]) {
-        const reader = new FileReader();
-        await new Promise<void>((resolve) => {
-          reader.onload = (ev) => {
-            if (ev.target?.result) fileList.push({ image_data: ev.target!.result as string });
-            resolve();
-          };
-          reader.readAsDataURL(f);
-        });
+        const compressedData = await compressImage(f);
+        if (compressedData) {
+          fileList.push({ image_data: compressedData });
+        }
       }
 
       if (fileList.length > 0) {
