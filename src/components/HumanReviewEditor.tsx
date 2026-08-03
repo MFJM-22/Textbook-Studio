@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -13,6 +13,7 @@ import {
   Split,
   Combine,
   Save,
+  Loader2,
 } from 'lucide-react';
 import { Book, Week, ContentSection } from '../types';
 import { parseMarkdownTable, normalizeContentSections } from '../lib/docGenerator';
@@ -32,17 +33,47 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
   onSaveWeeks,
   onApproveAndContinue,
 }) => {
-  const [weeksList, setWeeksList] = useState<Week[]>(() =>
-    (weeks || []).map((w) => ({
-      ...w,
-      content_json: normalizeContentSections(w.content_json || []),
-    }))
-  );
+  const [weeksList, setWeeksList] = useState<Week[]>(() => {
+    if (weeks && weeks.length > 0) {
+      return weeks.map((w) => ({
+        ...w,
+        content_json: normalizeContentSections(w.content_json || []),
+      }));
+    }
+    return [
+      {
+        id: `w-def-${Date.now()}`,
+        book_id: book.id,
+        week_number: 1,
+        topic: `${book.subject || 'Lesson Note'} - Week 1 Topic`,
+        content_json: [
+          {
+            subheading: 'Core Concepts & Overview',
+            paragraphs: ['Add lesson notes content here or review scanned OCR notes.'],
+          },
+        ],
+        created_at: new Date().toISOString(),
+      },
+    ];
+  });
+
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<number>(0);
   const [viewMode, setViewMode] = useState<'editor' | 'preview'>('editor');
   const [mobileTab, setMobileTab] = useState<'weeks' | 'editor'>('editor');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isApproving, setIsApproving] = useState<boolean>(false);
+
+  // Sync weeks state if incoming prop updates
+  useEffect(() => {
+    if (weeks && weeks.length > 0) {
+      setWeeksList(
+        weeks.map((w) => ({
+          ...w,
+          content_json: normalizeContentSections(w.content_json || []),
+        }))
+      );
+    }
+  }, [weeks]);
 
   const currentWeek = (weeksList && weeksList.length > 0)
     ? (weeksList[selectedWeekIndex] || weeksList[0])

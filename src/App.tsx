@@ -348,23 +348,29 @@ export default function App() {
     setSelectedBook(book);
     try {
       const details = await fetchBookDetails(book.id);
-      const currentWeeks = details?.weeks || weeks || [];
+      let currentWeeks = details?.weeks || weeks || [];
+      const pagesToUse = (pages && pages.length > 0) ? pages : (details?.pages || []);
 
-      // If weeks not structured yet, call AI structuring
+      // Always re-structure if weeks is empty
       if (currentWeeks.length === 0) {
         try {
           const structRes = await fetch(`/api/books/${book.id}/structure`, {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pages: pagesToUse }),
           });
           if (structRes.ok) {
             const structData = await structRes.json();
-            if (structData.weeks) {
-              setWeeks(structData.weeks);
+            if (structData.weeks && structData.weeks.length > 0) {
+              currentWeeks = structData.weeks;
+              setWeeks(currentWeeks);
             }
           }
         } catch (err) {
           console.error('Error structuring book:', err);
         }
+      } else {
+        setWeeks(currentWeeks);
       }
     } catch (err) {
       console.error('Error opening review view:', err);
@@ -390,15 +396,23 @@ export default function App() {
     setSelectedBook(book);
     try {
       const details = await fetchBookDetails(book.id);
-      const currentWeeks = details?.weeks || weeks || [];
+      let currentWeeks = details?.weeks || weeks || [];
+      const pagesToUse = (pages && pages.length > 0) ? pages : (details?.pages || []);
       if (currentWeeks.length === 0) {
         const structRes = await fetch(`/api/books/${book.id}/structure`, {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pages: pagesToUse }),
         }).catch(() => null);
         if (structRes && structRes.ok) {
           const structData = await structRes.json();
-          if (structData.weeks) setWeeks(structData.weeks);
+          if (structData.weeks && structData.weeks.length > 0) {
+            currentWeeks = structData.weeks;
+            setWeeks(currentWeeks);
+          }
         }
+      } else {
+        setWeeks(currentWeeks);
       }
     } finally {
       setCurrentView('print');
