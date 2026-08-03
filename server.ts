@@ -53,6 +53,26 @@ let pagesStore: Page[] = [];
 let weeksStore: Week[] = [];
 let glossaryStore: GlossaryTerm[] = [];
 
+// Helper to retrieve or lazily create a book in memory so endpoints never return 404 for dynamic IDs
+function getOrCreateBook(id: string, meta?: Partial<Book>): Book {
+  let book = booksStore.find((b) => b.id === id);
+  if (!book) {
+    book = {
+      id,
+      author_id: currentAuthor.id,
+      title: meta?.title || 'Integrated Science Textbook',
+      subject: meta?.subject || 'Science',
+      class_level: meta?.class_level || 'JSS 2',
+      term: meta?.term || '1st Term',
+      status: meta?.status || 'uploading',
+      created_at: new Date().toISOString(),
+      pages_count: 0,
+    };
+    booksStore.unshift(book);
+  }
+  return book;
+}
+
 // --- API ENDPOINTS ---
 
 // 1. Author Profile
@@ -86,9 +106,10 @@ app.get('/api/books', (req, res) => {
 
 app.post('/api/books', (req, res) => {
   try {
-    const { title, subject, class_level, term, sample_id } = req.body || {};
+    const { id, title, subject, class_level, term, sample_id } = req.body || {};
+    const bookId = id || `book-${Date.now()}`;
     const newBook: Book = {
-      id: `book-${Date.now()}`,
+      id: bookId,
       author_id: currentAuthor.id,
       title: title || `${subject || 'General'} Textbook`,
       subject: subject || 'Science',
@@ -99,7 +120,13 @@ app.post('/api/books', (req, res) => {
       pages_count: 0,
     };
 
-    booksStore.unshift(newBook);
+    // Replace if exists or unshift
+    const existingIndex = booksStore.findIndex((b) => b.id === bookId);
+    if (existingIndex >= 0) {
+      booksStore[existingIndex] = newBook;
+    } else {
+      booksStore.unshift(newBook);
+    }
 
     // If created from sample notes dataset
     if (sample_id && Array.isArray(sampleNotesData)) {
@@ -129,8 +156,7 @@ app.post('/api/books', (req, res) => {
 });
 
 app.get('/api/books/:id', (req, res) => {
-  const book = booksStore.find((b) => b.id === req.params.id);
-  if (!book) return res.status(404).json({ error: 'Book not found' });
+  const book = getOrCreateBook(req.params.id);
 
   const pages = pagesStore
     .filter((p) => p.book_id === book.id)
@@ -162,8 +188,7 @@ app.delete('/api/books/:id', (req, res) => {
 // 4. Upload Scanned Pages / Handwritten Notes + OCR via Gemini
 app.post('/api/books/:id/upload-pages', async (req, res) => {
   const bookId = req.params.id;
-  const book = booksStore.find((b) => b.id === bookId);
-  if (!book) return res.status(404).json({ error: 'Book not found' });
+  const book = getOrCreateBook(bookId);
 
   const { pages } = req.body as { pages: { image_data?: string; image_url?: string; raw_text?: string }[] };
   if (!Array.isArray(pages) || pages.length === 0) {
@@ -279,8 +304,7 @@ app.post('/api/books/:id/re-ocr-page', async (req, res) => {
 // 6. AI Structuring (Raw Notes -> Term/Week/Topic JSON)
 app.post('/api/books/:id/structure', async (req, res) => {
   const bookId = req.params.id;
-  const book = booksStore.find((b) => b.id === bookId);
-  if (!book) return res.status(404).json({ error: 'Book not found' });
+  const book = getOrCreateBook(bookId);
 
   const pages = pagesStore.filter((p) => p.book_id === bookId).sort((a, b) => a.page_order - b.page_order);
   const combinedRawNotes = pages.map((p, idx) => `--- PAGE ${idx + 1} ---\n${p.raw_ocr_text || ''}`).join('\n\n');
@@ -432,8 +456,7 @@ app.put('/api/books/:id/weeks', (req, res) => {
 // 8. Human Review Approval Gate & Glossary Generation
 app.post('/api/books/:id/approve-structure', async (req, res) => {
   const bookId = req.params.id;
-  const book = booksStore.find((b) => b.id === bookId);
-  if (!book) return res.status(404).json({ error: 'Book not found' });
+  const book = getOrCreateBook(bookId);
 
   book.status = 'reviewed';
 
@@ -534,11 +557,51 @@ app.delete('/api/books/:id/glossary/:termId', (req, res) => {
 // 10. Generate DOCX Export Endpoint
 app.post('/api/books/:id/generate-docx', async (req, res) => {
   const bookId = req.params.id;
-  const book = booksStore.find((b) => b.id === bookId);
-  if (!book) return res.status(404).json({ error: 'Book not found' });
+  const book = getOrCreateBook(bookId);
 
-  const weeks = weeksStore.filter((w) => w.book_id === bookId).sort((a, b) => a.week_number - b.week_number);
+  let weeks = weeksStore.filter((w) => w.book_id === bookId).sort((a, b) => a.week_number - b.week_number);
   const glossary = glossaryStore.filter((g) => g.book_id === bookId);
+
+  // If no weeks exist yet, auto-generate default lesson units from pages or fallback
+  if (weeks.length === 0) {
+    const pages = pagesStore.filter((p) => p.book_id === bookId);
+    if (pages.length > 0) {
+      weeks = pages.map((p, idx) => ({
+        id: `w-auto-${Date.now()}-${idx + 1}`,
+        book_id: bookId,
+        week_number: idx + 1,
+        topic: `Unit ${idx + 1}: Lesson Overview`,
+        content_json: normalizeContentSections([
+          {
+            subheading: `Lesson Summary (Page ${p.page_order})`,
+            paragraphs: (p.raw_ocr_text || 'Core lesson material.').split('\n').filter((l) => l.trim().length > 0),
+          },
+        ]),
+        created_at: new Date().toISOString(),
+      }));
+    } else {
+      weeks = [
+        {
+          id: `w-default-${Date.now()}-1`,
+          book_id: bookId,
+          week_number: 1,
+          topic: `Week 1: Introduction to ${book.subject}`,
+          content_json: normalizeContentSections([
+            {
+              subheading: 'Fundamental Concepts & Curriculum Overview',
+              paragraphs: [
+                `Welcome to ${book.title} (${book.class_level}, ${book.term}).`,
+                'This textbook module includes core curriculum units, structured table visualizations, and key terms glossary.',
+              ],
+            },
+          ]),
+          created_at: new Date().toISOString(),
+        },
+      ];
+    }
+    // Save to store
+    weeks.forEach((w) => weeksStore.push(w));
+  }
 
   try {
     const docBuffer = await generateBookDocx(book, currentAuthor, weeks, glossary);

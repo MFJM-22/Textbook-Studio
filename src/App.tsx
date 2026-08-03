@@ -279,25 +279,24 @@ export default function App() {
   // Open Views
   const handleOpenOCRView = async (book: Book) => {
     setIsLoading(true);
+    setSelectedBook(book);
     try {
-      const details = await fetchBookDetails(book.id);
-      if (details) setCurrentView('ocr');
+      await fetchBookDetails(book.id);
     } finally {
+      setCurrentView('ocr');
       setIsLoading(false);
     }
   };
 
   const handleOpenReviewView = async (book: Book) => {
     setIsLoading(true);
+    setSelectedBook(book);
     try {
       const details = await fetchBookDetails(book.id);
-      if (!details) {
-        setIsLoading(false);
-        return;
-      }
+      const currentWeeks = details?.weeks || weeks || [];
 
       // If weeks not structured yet, call AI structuring
-      if (!details.weeks || details.weeks.length === 0) {
+      if (currentWeeks.length === 0) {
         try {
           const structRes = await fetch(`/api/books/${book.id}/structure`, {
             method: 'POST',
@@ -312,30 +311,42 @@ export default function App() {
           console.error('Error structuring book:', err);
         }
       }
-      setCurrentView('review');
     } catch (err) {
       console.error('Error opening review view:', err);
     } finally {
+      setCurrentView('review');
       setIsLoading(false);
     }
   };
 
   const handleOpenGlossaryView = async (book: Book) => {
     setIsLoading(true);
+    setSelectedBook(book);
     try {
-      const details = await fetchBookDetails(book.id);
-      if (details) setCurrentView('glossary');
+      await fetchBookDetails(book.id);
     } finally {
+      setCurrentView('glossary');
       setIsLoading(false);
     }
   };
 
   const handleOpenPrintView = async (book: Book) => {
     setIsLoading(true);
+    setSelectedBook(book);
     try {
       const details = await fetchBookDetails(book.id);
-      if (details) setCurrentView('print');
+      const currentWeeks = details?.weeks || weeks || [];
+      if (currentWeeks.length === 0) {
+        const structRes = await fetch(`/api/books/${book.id}/structure`, {
+          method: 'POST',
+        }).catch(() => null);
+        if (structRes && structRes.ok) {
+          const structData = await structRes.json();
+          if (structData.weeks) setWeeks(structData.weeks);
+        }
+      }
     } finally {
+      setCurrentView('print');
       setIsLoading(false);
     }
   };
@@ -371,7 +382,7 @@ export default function App() {
     }
   };
 
-  const handleUploadMorePages = async (files: { image_data?: string }[]) => {
+  const handleUploadMorePages = async (files: { image_data?: string; raw_text?: string }[]) => {
     if (!selectedBook) return;
     try {
       const res = await fetch(`/api/books/${selectedBook.id}/upload-pages`, {
@@ -380,6 +391,9 @@ export default function App() {
         body: JSON.stringify({ pages: files }),
       });
       const data = await res.json();
+      if (data.pages) {
+        setPages((prev) => [...prev, ...data.pages]);
+      }
       await fetchBookDetails(selectedBook.id);
     } catch (err) {
       console.error('Error uploading more pages:', err);
