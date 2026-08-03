@@ -91,17 +91,24 @@ app.put('/api/author', (req, res) => {
 
 // 2. Sample Notes for quick testing
 app.get('/api/sample-notes', (req, res) => {
-  res.json(sampleNotesData);
+  try {
+    res.json(sampleNotesData || []);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to fetch sample notes' });
+  }
 });
 
 // 3. Books Management
 app.get('/api/books', (req, res) => {
-  // calculate updated page count
-  const booksWithCounts = booksStore.map((b) => ({
-    ...b,
-    pages_count: pagesStore.filter((p) => p.book_id === b.id).length,
-  }));
-  res.json(booksWithCounts);
+  try {
+    const booksWithCounts = (booksStore || []).map((b) => ({
+      ...b,
+      pages_count: (pagesStore || []).filter((p) => p.book_id === b.id).length,
+    }));
+    res.json(booksWithCounts);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to fetch books' });
+  }
 });
 
 app.post('/api/books', (req, res) => {
@@ -156,24 +163,29 @@ app.post('/api/books', (req, res) => {
 });
 
 app.get('/api/books/:id', (req, res) => {
-  const book = getOrCreateBook(req.params.id);
+  try {
+    const book = getOrCreateBook(req.params.id);
 
-  const pages = pagesStore
-    .filter((p) => p.book_id === book.id)
-    .sort((a, b) => a.page_order - b.page_order);
+    const pages = (pagesStore || [])
+      .filter((p) => p.book_id === book.id)
+      .sort((a, b) => a.page_order - b.page_order);
 
-  const weeks = weeksStore
-    .filter((w) => w.book_id === book.id)
-    .sort((a, b) => a.week_number - b.week_number);
+    const weeks = (weeksStore || [])
+      .filter((w) => w.book_id === book.id)
+      .sort((a, b) => a.week_number - b.week_number);
 
-  const glossary = glossaryStore.filter((g) => g.book_id === book.id);
+    const glossary = (glossaryStore || []).filter((g) => g.book_id === book.id);
 
-  res.json({
-    ...book,
-    pages,
-    weeks,
-    glossary,
-  });
+    res.json({
+      ...book,
+      pages,
+      weeks,
+      glossary,
+    });
+  } catch (err: any) {
+    console.error(`Error in GET /api/books/${req.params.id}:`, err);
+    res.status(500).json({ error: err?.message || 'Failed to fetch book' });
+  }
 });
 
 app.delete('/api/books/:id', (req, res) => {
@@ -238,7 +250,7 @@ app.post('/api/books/:id/upload-pages', async (req, res) => {
         }
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.6-flash',
           contents: contentInput,
         });
 
@@ -288,7 +300,7 @@ app.post('/api/books/:id/re-ocr-page', async (req, res) => {
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: contentInput,
     });
 
@@ -327,7 +339,7 @@ Structure the extracted notes into an array of Weeks. Each Week must have:
 Return strictly valid JSON corresponding to this schema.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: `Raw Notes Source Material:\n${combinedRawNotes}`,
       config: {
         systemInstruction: systemPrompt,
@@ -470,7 +482,7 @@ app.post('/api/books/:id/approve-structure', async (req, res) => {
     const prompt = `Extract a list of 5 to 15 key technical terms, vocabulary words, and concepts with clear concise definitions from the following textbook material:\n\n${textContent}`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -615,6 +627,15 @@ app.post('/api/books/:id/generate-docx', async (req, res) => {
     console.error('Docx Export Failure:', err);
     res.status(500).json({ error: 'Failed to generate Word document' });
   }
+});
+
+// Global API Error Handler Middleware (prevents HTML 500 responses)
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled API Error:', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(500).json({ error: err?.message || 'An internal server error occurred' });
 });
 
 // Setup Vite or Static File Serving

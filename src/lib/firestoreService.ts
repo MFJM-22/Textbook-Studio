@@ -11,7 +11,7 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { Book, Week } from '../types';
+import { Book, Week, Page } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -129,5 +129,33 @@ export async function deleteBookFromFirestore(bookId: string): Promise<void> {
     await deleteDoc(doc(db, 'books', bookId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// Save Pages for a Book
+export async function savePagesToFirestore(bookId: string, pages: Page[]): Promise<void> {
+  for (const page of pages) {
+    const path = `books/${bookId}/pages/${page.id}`;
+    try {
+      await setDoc(doc(db, 'books', bookId, 'pages', page.id), {
+        ...page,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  }
+}
+
+// Fetch Pages for a Book
+export async function fetchPagesFromFirestore(bookId: string): Promise<Page[]> {
+  const path = `books/${bookId}/pages`;
+  try {
+    const snapshot = await getDocs(collection(db, 'books', bookId, 'pages'));
+    const pages = snapshot.docs.map((d) => d.data() as Page);
+    return pages.sort((a, b) => a.page_order - b.page_order);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return [];
   }
 }

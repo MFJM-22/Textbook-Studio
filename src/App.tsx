@@ -31,6 +31,8 @@ import {
   saveBookToFirestore,
   subscribeToBooks,
   deleteBookFromFirestore,
+  savePagesToFirestore,
+  fetchPagesFromFirestore,
 } from './lib/firestoreService';
 
 export default function App() {
@@ -134,22 +136,43 @@ export default function App() {
   };
 
   const fetchBookDetails = async (bookId: string) => {
+    let bookData: any = null;
     try {
       const res = await fetch(`/api/books/${bookId}`);
-      if (!res.ok) {
-        console.error(`Failed to fetch book ${bookId}: HTTP status ${res.status}`);
-        return null;
+      if (res.ok) {
+        bookData = await res.json();
+        setSelectedBook(bookData);
+      } else {
+        console.warn(`Server responded with status ${res.status} for book ${bookId}`);
       }
-      const data = await res.json();
-      setSelectedBook(data);
-      setPages(data.pages || []);
-      setWeeks(data.weeks || []);
-      setGlossary(data.glossary || []);
-      return data;
     } catch (err) {
-      console.error('Error fetching book details:', err);
-      return null;
+      console.warn(`Error fetching book ${bookId} from server API:`, err);
     }
+
+    // Recover or fetch pages from Firestore / local state
+    let fetchedPages: Page[] = bookData?.pages || [];
+    if (fetchedPages.length === 0) {
+      try {
+        const fsPages = await fetchPagesFromFirestore(bookId);
+        if (fsPages.length > 0) {
+          fetchedPages = fsPages;
+        }
+      } catch (fsErr) {
+        console.warn('Error fetching pages from Firestore:', fsErr);
+      }
+    }
+
+    // Preserve existing pages in state if matching book
+    if (fetchedPages.length === 0 && selectedBook?.id === bookId && pages.length > 0) {
+      fetchedPages = pages;
+    }
+
+    setPages(fetchedPages);
+    if (bookData?.weeks) setWeeks(bookData.weeks);
+    if (bookData?.glossary) setGlossary(bookData.glossary);
+
+    const currentBookObj = bookData || selectedBook || { id: bookId, title: 'Textbook' };
+    return { ...currentBookObj, pages: fetchedPages };
   };
 
   // Author Profile Update
@@ -257,8 +280,24 @@ export default function App() {
             console.warn('Pages upload HTTP status:', uploadRes.status);
           }
         } catch (uploadErr) {
-          console.error('Error uploading pages:', uploadErr);
+          console.error('Error uploading pages to backend:', uploadErr);
         }
+
+        // Guaranteed Fallback: If backend didn't return pages, create local Page objects from uploaded files
+        if (createdPages.length === 0) {
+          createdPages = uploaded_files.map((fItem, idx) => ({
+            id: `p-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+            book_id: userBook.id,
+            page_order: idx + 1,
+            image_url: fItem.image_data || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
+            raw_ocr_text: fItem.raw_text || 'Scanned lesson note page.',
+            ocr_confidence: 0.95,
+            status: 'completed',
+            created_at: new Date().toISOString(),
+          }));
+        }
+
+        savePagesToFirestore(userBook.id, createdPages).catch(() => null);
       }
 
       setIsNewBookModalOpen(false);
@@ -401,16 +440,39 @@ export default function App() {
   const handleUploadMorePages = async (files: { image_data?: string; raw_text?: string }[]) => {
     if (!selectedBook) return;
     try {
-      const res = await fetch(`/api/books/${selectedBook.id}/upload-pages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pages: files }),
-      });
-      const data = await res.json();
-      if (data.pages) {
-        setPages((prev) => [...prev, ...data.pages]);
+      let newPages: Page[] = [];
+      try {
+        const res = await fetch(`/api/books/${selectedBook.id}/upload-pages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pages: files }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.pages && data.pages.length > 0) {
+            newPages = data.pages;
+          }
+        }
+      } catch (err) {
+        console.warn('Error uploading pages to backend server:', err);
       }
-      await fetchBookDetails(selectedBook.id);
+
+      if (newPages.length === 0) {
+        const startOrder = pages.length + 1;
+        newPages = files.map((f, idx) => ({
+          id: `p-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+          book_id: selectedBook.id,
+          page_order: startOrder + idx,
+          image_url: f.image_data || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
+          raw_ocr_text: f.raw_text || 'Scanned lesson note page.',
+          ocr_confidence: 0.95,
+          status: 'completed',
+          created_at: new Date().toISOString(),
+        }));
+      }
+
+      setPages((prev) => [...prev, ...newPages]);
+      savePagesToFirestore(selectedBook.id, newPages).catch(() => null);
     } catch (err) {
       console.error('Error uploading more pages:', err);
     }

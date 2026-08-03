@@ -219,19 +219,29 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
               </p>
             </div>
 
+            {isUploadingMore && (
+              <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200 animate-pulse">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Processing scanned pages with Gemini OCR...</span>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <label
                 htmlFor="upload-empty-pages"
-                className="cursor-pointer px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all"
+                className={`cursor-pointer px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all ${
+                  isUploadingMore ? 'opacity-50 pointer-events-none' : ''
+                }`}
               >
-                <Upload className="w-4 h-4" />
-                <span>Upload Scanned Images</span>
+                {isUploadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                <span>{isUploadingMore ? 'Processing...' : 'Upload Scanned Images'}</span>
                 <input
                   type="file"
                   id="upload-empty-pages"
                   multiple
                   accept="image/*"
                   onChange={handleAddMoreFiles}
+                  disabled={isUploadingMore}
                   className="hidden"
                 />
               </label>
