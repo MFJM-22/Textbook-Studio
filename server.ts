@@ -448,32 +448,74 @@ Return strictly valid JSON corresponding to this schema.`;
   const fallbackWeeks: Week[] = effectivePages.map((p, idx) => {
     const rawText = (p.raw_ocr_text || '').trim();
     const lines = rawText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-    const topicLine = lines.find((l) => /^week|\btopic\b/i.test(l)) || (lines[0] && !lines[0].startsWith('|') ? lines[0] : `Chemical Symbols & Elements`);
 
-    let paragraphsToUse = lines;
-
-    // If text was default/empty or generic, supply rich structured content with elements table
-    if (lines.length === 0 || rawText.includes('Add lesson notes content') || rawText.includes('Scanned lesson note page')) {
-      paragraphsToUse = [
-        'Chemical symbols represent one or two letters of the alphabet denoting one atom of a chemical element.',
-        'Learning Outcome: By the end of this lesson, pupils will identify chemical symbols and memorize the first twenty (20) elements.',
-        '| No. | Element | Symbol |\n| --- | --- | --- |\n| 1 | Hydrogen | H |\n| 2 | Helium | He |\n| 3 | Lithium | Li |\n| 4 | Beryllium | Be |\n| 5 | Boron | B |\n| 6 | Carbon | C |\n| 7 | Nitrogen | N |\n| 8 | Oxygen | O |\n| 9 | Fluorine | F |\n| 10 | Neon | Ne |\n| 11 | Sodium | Na |\n| 12 | Magnesium | Mg |\n| 13 | Aluminum | Al |\n| 14 | Silicon | Si |\n| 15 | Phosphorus | P |\n| 16 | Sulfur | S |\n| 17 | Chlorine | Cl |\n| 18 | Argon | Ar |\n| 19 | Potassium | K |\n| 20 | Calcium | Ca |'
-      ];
+    let topicLine = `Week ${idx + 1}: ${book.subject || 'Lesson Unit'}`;
+    if (lines.length > 0) {
+      const topicCandidate = lines.find((l) => /^week|\btopic\b/i.test(l)) || lines[0];
+      if (topicCandidate && !topicCandidate.startsWith('|')) {
+        topicLine = topicCandidate.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim();
+      }
     }
 
-    const rawSections = [
-      {
-        subheading: 'Lesson Topic & Chemical Symbols Classification',
-        paragraphs: paragraphsToUse,
-      },
-    ];
-    const normalizedSections = normalizeContentSections(rawSections);
+    const sections: { subheading: string; paragraphs: string[] }[] = [];
+    let currentSubheading = 'Lesson Content & Core Notes';
+    let currentParagraphs: string[] = [];
+    let tableBuffer: string[] = [];
+
+    const flushTable = () => {
+      if (tableBuffer.length > 0) {
+        currentParagraphs.push(tableBuffer.join('\n'));
+        tableBuffer = [];
+      }
+    };
+
+    const flushSection = () => {
+      flushTable();
+      if (currentParagraphs.length > 0) {
+        sections.push({
+          subheading: currentSubheading,
+          paragraphs: [...currentParagraphs],
+        });
+        currentParagraphs = [];
+      }
+    };
+
+    for (const line of lines) {
+      if (line.startsWith('|') && (line.endsWith('|') || line.includes('|', 1))) {
+        tableBuffer.push(line);
+        continue;
+      }
+
+      flushTable();
+
+      if (line.startsWith('#') || line.startsWith('WEEK') || line.startsWith('TOPIC:') || line.startsWith('SECTION:') || (line.endsWith(':') && line.length < 60)) {
+        if (currentParagraphs.length > 0) {
+          flushSection();
+        }
+        const subCandidate = line.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').replace(/^SECTION:?/i, '').trim();
+        if (subCandidate) {
+          currentSubheading = subCandidate;
+        }
+      } else {
+        currentParagraphs.push(line);
+      }
+    }
+    flushSection();
+
+    if (sections.length === 0) {
+      sections.push({
+        subheading: 'Lesson Notes',
+        paragraphs: lines.length > 0 ? lines : ['No text content transcribed for this page.'],
+      });
+    }
+
+    const normalizedSections = normalizeContentSections(sections);
 
     const wObj: Week = {
       id: `w-fb-${Date.now()}-${idx + 1}`,
       book_id: bookId,
       week_number: idx + 1,
-      topic: topicLine.replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim() || `Chemical Symbols & Elements`,
+      topic: topicLine || `Week ${idx + 1} Unit`,
       content_json: normalizedSections,
       created_at: new Date().toISOString(),
     };

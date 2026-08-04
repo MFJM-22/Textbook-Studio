@@ -45,11 +45,11 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
         id: `w-def-${Date.now()}`,
         book_id: book.id,
         week_number: 1,
-        topic: `${book.subject || 'Lesson Note'} - Week 1 Topic`,
+        topic: `${book.title || book.subject || 'Lesson Unit'}`,
         content_json: [
           {
-            subheading: 'Core Concepts & Overview',
-            paragraphs: ['Add lesson notes content here or review scanned OCR notes.'],
+            subheading: 'Unit Overview & Key Topics',
+            paragraphs: [`Transcribed content for ${book.title || 'this textbook'}.`],
           },
         ],
         created_at: new Date().toISOString(),
