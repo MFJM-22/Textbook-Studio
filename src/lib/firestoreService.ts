@@ -56,8 +56,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
 }
 
 // Save or Update a Book
@@ -132,6 +131,8 @@ export async function deleteBookFromFirestore(bookId: string): Promise<void> {
   }
 }
 
+import { GlossaryTerm } from '../types';
+
 // Save Pages for a Book
 export async function savePagesToFirestore(bookId: string, pages: Page[]): Promise<void> {
   for (const page of pages) {
@@ -154,6 +155,33 @@ export async function fetchPagesFromFirestore(bookId: string): Promise<Page[]> {
     const snapshot = await getDocs(collection(db, 'books', bookId, 'pages'));
     const pages = snapshot.docs.map((d) => d.data() as Page);
     return pages.sort((a, b) => a.page_order - b.page_order);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return [];
+  }
+}
+
+// Save Glossary for a Book
+export async function saveGlossaryToFirestore(bookId: string, glossary: GlossaryTerm[]): Promise<void> {
+  for (const item of glossary) {
+    const path = `books/${bookId}/glossary/${item.id}`;
+    try {
+      await setDoc(doc(db, 'books', bookId, 'glossary', item.id), {
+        ...item,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  }
+}
+
+// Fetch Glossary for a Book
+export async function fetchGlossaryFromFirestore(bookId: string): Promise<GlossaryTerm[]> {
+  const path = `books/${bookId}/glossary`;
+  try {
+    const snapshot = await getDocs(collection(db, 'books', bookId, 'glossary'));
+    return snapshot.docs.map((d) => d.data() as GlossaryTerm);
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
     return [];

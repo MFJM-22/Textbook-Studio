@@ -221,15 +221,25 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
 
   const handleSave = async () => {
     setIsSaving(true);
-    await onSaveWeeks(weeksList);
-    setIsSaving(false);
+    try {
+      await onSaveWeeks(weeksList);
+    } catch (err) {
+      console.error('Error saving weeks:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleApprove = async () => {
     setIsApproving(true);
-    await onSaveWeeks(weeksList);
-    await onApproveAndContinue();
-    setIsApproving(false);
+    try {
+      await onSaveWeeks(weeksList);
+      await onApproveAndContinue();
+    } catch (err) {
+      console.error('Error approving structure:', err);
+    } finally {
+      setIsApproving(false);
+    }
   };
 
   return (
