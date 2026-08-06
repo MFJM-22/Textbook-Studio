@@ -51,7 +51,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     } catch (err: any) {
       console.error('Auth error:', err);
       let msg = err?.message || 'Authentication failed.';
-      if (msg.includes('auth/operation-not-allowed')) {
+      if (msg.includes('auth/unauthorized-domain')) {
+        msg = `Domain unauthorized (${window.location.hostname}). Add "${window.location.hostname}" to Firebase Console -> Authentication -> Settings -> Authorized Domains.`;
+      } else if (msg.includes('auth/operation-not-allowed')) {
         msg = 'Email/Password authentication is disabled in Firebase Console. Please use "Sign in with Google" below or enable Email/Password provider in your Firebase project.';
       } else if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
         msg = 'Invalid email or password.';
@@ -78,7 +80,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     } catch (err: any) {
       console.error('Google auth error:', err);
       let msg = err?.message || 'Failed to sign in with Google.';
-      if (msg.includes('auth/operation-not-allowed')) {
+      if (msg.includes('auth/unauthorized-domain')) {
+        msg = `Unauthorized Domain (${window.location.hostname}). To enable Google Sign-In for custom or deployed URLs (like Vercel or preview domains), add "${window.location.hostname}" in Firebase Console -> Authentication -> Settings -> Authorized Domains.`;
+      } else if (msg.includes('auth/operation-not-allowed')) {
         msg = 'Google Sign-In is disabled in Firebase Console. Please enable Google provider in your Firebase authentication settings.';
       } else if (msg.includes('auth/popup-closed-by-user')) {
         msg = 'Sign-in window was closed before completing.';
