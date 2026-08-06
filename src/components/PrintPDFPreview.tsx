@@ -36,7 +36,46 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
         margin: [0.3, 0.4, 0.3, 0.4] as [number, number, number, number],
         filename: `${(book.title || 'Textbook').replace(/[^a-z0-9]/gi, '_')}.pdf`,
         image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          onclone: (clonedDoc: Document) => {
+            // Helper canvas context to convert any CSS color string (including oklch) to standard hex/rgba
+            const canvas = clonedDoc.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const convertColor = (colorStr: string) => {
+              if (!ctx) return '#64748b';
+              try {
+                ctx.fillStyle = '#000000';
+                ctx.fillStyle = colorStr;
+                return ctx.fillStyle || '#64748b';
+              } catch {
+                return '#64748b';
+              }
+            };
+
+            const oklchRegex = /oklch\([^)]+\)/g;
+
+            // 1. Replace oklch in all <style> tags
+            const styles = clonedDoc.querySelectorAll('style');
+            styles.forEach((style) => {
+              if (style.textContent && style.textContent.includes('oklch')) {
+                style.textContent = style.textContent.replace(oklchRegex, (match) => convertColor(match));
+              }
+            });
+
+            // 2. Replace oklch in inline styles of elements
+            const allElements = clonedDoc.querySelectorAll('*');
+            allElements.forEach((el) => {
+              const htmlEl = el as HTMLElement;
+              if (htmlEl.style && htmlEl.style.cssText && htmlEl.style.cssText.includes('oklch')) {
+                htmlEl.style.cssText = htmlEl.style.cssText.replace(oklchRegex, (match) => convertColor(match));
+              }
+            });
+          },
+        },
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const },
         pagebreak: { mode: ['css', 'legacy'] },
       };
@@ -66,26 +105,26 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
   const sortedGlossary = [...safeGlossary].sort((a, b) => a.term.localeCompare(b.term));
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-900 font-sans print:bg-white print:text-black">
+    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans print:bg-white print:text-black">
       {/* Non-printable Top Bar */}
-      <div className="bg-slate-950 border-b border-slate-800 px-6 py-4 flex items-center justify-between sticky top-0 z-40 print:hidden text-white">
+      <div className="bg-white border-b border-slate-200/80 px-6 py-4 flex items-center justify-between sticky top-0 z-40 print:hidden text-slate-900 shadow-xs">
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
-            className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-2 text-slate-500 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors border border-slate-200/60"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-base font-bold text-white">Textbook Print & PDF Studio</h2>
-            <p className="text-xs text-slate-400">{book.title}</p>
+            <h2 className="text-base font-bold text-slate-900">Textbook Print & PDF Studio</h2>
+            <p className="text-xs text-slate-500">{book.title}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={onExportDocx}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full text-xs font-bold transition-all shadow-xs"
           >
             <Download className="w-4 h-4" />
             Download Word (.docx)
@@ -95,7 +134,7 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
             onClick={handleDownloadPdf}
             disabled={isGeneratingPdf}
             id="download-pdf-btn"
-            className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-sm cursor-pointer disabled:cursor-wait"
+            className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer disabled:cursor-wait"
           >
             {isGeneratingPdf ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -108,7 +147,7 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
           <button
             onClick={handlePrint}
             id="print-pdf-btn"
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold transition-all shadow-xs"
           >
             <Printer className="w-4 h-4" />
             Print Document
