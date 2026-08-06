@@ -381,10 +381,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>
                   </div>
 
-                  <div className="pt-4 mt-4 border-t border-slate-800/60 flex items-center justify-between text-xs font-semibold text-purple-400">
-                    <span>Explore Step</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </div>
+
                 </div>
               );
             })}
