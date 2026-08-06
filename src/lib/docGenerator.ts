@@ -180,7 +180,7 @@ export function buildDocxDocument(
   book: Book,
   author: Author,
   weeks: Week[],
-  glossary: GlossaryTerm[]
+  glossary?: GlossaryTerm[]
 ): Document {
   const sectionsChildren: (Paragraph | Table)[] = [];
 
@@ -305,16 +305,6 @@ export function buildDocxDocument(
   });
 
   const safeGlossary = glossary || [];
-  if (safeGlossary.length > 0) {
-    sectionsChildren.push(
-      new Paragraph({
-        children: [
-          new TextRun({ text: `Glossary of Key Terms`, bold: true, color: '2563EB' }),
-        ],
-        spacing: { before: 200, after: 150 },
-      })
-    );
-  }
 
   sectionsChildren.push(
     new Paragraph({
@@ -385,31 +375,6 @@ export function buildDocxDocument(
     );
   });
 
-  // --- GLOSSARY SECTION ---
-  if (safeGlossary.length > 0) {
-    sectionsChildren.push(
-      new Paragraph({
-        text: 'Glossary',
-        heading: HeadingLevel.HEADING_1,
-        spacing: { before: 200, after: 400 },
-      })
-    );
-
-    const sortedGlossary = [...safeGlossary].sort((a, b) => (a.term || '').localeCompare(b.term || ''));
-
-    sortedGlossary.forEach((item) => {
-      sectionsChildren.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: `${item.term || ''}: `, bold: true, color: '0F172A', size: 24 }),
-            new TextRun({ text: item.definition || '', color: '334155', size: 24 }),
-          ],
-          spacing: { after: 200 },
-        })
-      );
-    });
-  }
-
   return new Document({
     sections: [
       {
@@ -438,7 +403,7 @@ export async function generateBookDocx(
   book: Book,
   author: Author,
   weeks: Week[],
-  glossary: GlossaryTerm[]
+  glossary?: GlossaryTerm[]
 ): Promise<Buffer> {
   const doc = buildDocxDocument(book, author, weeks, glossary);
   return await Packer.toBuffer(doc);
@@ -448,7 +413,7 @@ export async function generateBookDocxBlob(
   book: Book,
   author: Author,
   weeks: Week[],
-  glossary: GlossaryTerm[]
+  glossary?: GlossaryTerm[]
 ): Promise<Blob> {
   const doc = buildDocxDocument(book, author, weeks, glossary);
   return await Packer.toBlob(doc);

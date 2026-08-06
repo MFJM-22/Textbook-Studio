@@ -3,12 +3,13 @@ import { Printer, ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import { Author, Book, Week, GlossaryTerm } from '../types';
 import { parseMarkdownTable } from '../lib/docGenerator';
+import { sanitizeClonedDocForPdf } from '../lib/pdfUtils';
 
 interface PrintPDFPreviewProps {
   book: Book;
   author: Author;
   weeks: Week[];
-  glossary: GlossaryTerm[];
+  glossary?: GlossaryTerm[];
   onBack: () => void;
   onExportDocx: () => void;
 }
@@ -17,7 +18,6 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
   book,
   author,
   weeks,
-  glossary,
   onBack,
   onExportDocx,
 }) => {
@@ -32,9 +32,10 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
     setIsGeneratingPdf(true);
     try {
       const html2pdfRunner = (html2pdf as any).default || html2pdf;
+      const filename = `${(book.title || 'Textbook').replace(/[^a-z0-9]/gi, '_')}.pdf`;
       const opt = {
         margin: [0.3, 0.4, 0.3, 0.4] as [number, number, number, number],
-        filename: `${(book.title || 'Textbook').replace(/[^a-z0-9]/gi, '_')}.pdf`,
+        filename: filename,
         image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: {
           scale: 2,
@@ -42,50 +43,49 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
           allowTaint: true,
           logging: false,
           onclone: (clonedDoc: Document) => {
-            // Helper canvas context to convert any CSS color string (including oklch) to standard hex/rgba
-            const canvas = clonedDoc.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const convertColor = (colorStr: string) => {
-              if (!ctx) return '#64748b';
-              try {
-                ctx.fillStyle = '#000000';
-                ctx.fillStyle = colorStr;
-                return ctx.fillStyle || '#64748b';
-              } catch {
-                return '#64748b';
-              }
-            };
-
-            const oklchRegex = /oklch\([^)]+\)/g;
-
-            // 1. Replace oklch in all <style> tags
-            const styles = clonedDoc.querySelectorAll('style');
-            styles.forEach((style) => {
-              if (style.textContent && style.textContent.includes('oklch')) {
-                style.textContent = style.textContent.replace(oklchRegex, (match) => convertColor(match));
-              }
-            });
-
-            // 2. Replace oklch in inline styles of elements
-            const allElements = clonedDoc.querySelectorAll('*');
-            allElements.forEach((el) => {
-              const htmlEl = el as HTMLElement;
-              if (htmlEl.style && htmlEl.style.cssText && htmlEl.style.cssText.includes('oklch')) {
-                htmlEl.style.cssText = htmlEl.style.cssText.replace(oklchRegex, (match) => convertColor(match));
-              }
-            });
+            sanitizeClonedDocForPdf(clonedDoc);
           },
         },
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const },
         pagebreak: { mode: ['css', 'legacy'] },
       };
-      await html2pdfRunner().set(opt).from(element).save();
+
+      const worker = html2pdfRunner().set(opt).from(element);
+      const pdfBlob = await worker.outputContainer('blob');
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
     } catch (err) {
-      console.error('PDF generation error, falling back to window.print:', err);
+      console.error('Blob PDF export error, falling back to direct save:', err);
       try {
+        const html2pdfRunner = (html2pdf as any).default || html2pdf;
+        const filename = `${(book.title || 'Textbook').replace(/[^a-z0-9]/gi, '_')}.pdf`;
+        const opt = {
+          margin: [0.3, 0.4, 0.3, 0.4] as [number, number, number, number],
+          filename: filename,
+          image: { type: 'jpeg' as const, quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            onclone: (clonedDoc: Document) => {
+              sanitizeClonedDocForPdf(clonedDoc);
+            },
+          },
+          jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const },
+          pagebreak: { mode: ['css', 'legacy'] },
+        };
+        await html2pdfRunner().set(opt).from(element).save();
+      } catch (saveErr) {
+        alert('Could not download PDF directly. Opening print dialog to Save as PDF.');
         window.print();
-      } catch (printErr) {
-        alert('Browser print blocked. Please use Chrome/Safari print dialog to save as PDF.');
       }
     } finally {
       setIsGeneratingPdf(false);
@@ -101,8 +101,6 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
   };
 
   const safeWeeks = weeks || [];
-  const safeGlossary = glossary || [];
-  const sortedGlossary = [...safeGlossary].sort((a, b) => a.term.localeCompare(b.term));
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans print:bg-white print:text-black">
@@ -224,13 +222,6 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
                 <span className="text-xs text-slate-400 font-mono">Page {w.week_number + 3}</span>
               </div>
             ))}
-
-            {safeGlossary.length > 0 && (
-              <div className="flex items-baseline justify-between border-b border-dotted border-slate-300 pb-1 text-sm pt-4">
-                <span className="font-bold text-slate-900">Glossary of Key Terms</span>
-                <span className="text-xs text-slate-400 font-mono">Page {safeWeeks.length + 4}</span>
-              </div>
-            )}
           </div>
         </div>
 
@@ -334,28 +325,6 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
             </div>
           </div>
         ))}
-
-        {/* GLOSSARY */}
-        {sortedGlossary.length > 0 && (
-          <div className="py-12 space-y-6">
-            <h2 className="text-2xl font-bold text-slate-900 border-b-2 border-slate-900 pb-2">
-              Glossary of Key Terms
-            </h2>
-
-            <div className="grid grid-cols-1 gap-3">
-              {sortedGlossary.map((item) => (
-                <div key={item.id} className="text-xs space-y-1">
-                  <span className="font-bold text-slate-900">{item.term}: </span>
-                  <span className="text-slate-700">{item.definition}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-6 text-right text-[11px] text-slate-400 border-t border-slate-100">
-              {book.title} • Page {weeks.length + 4}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

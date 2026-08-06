@@ -20,7 +20,6 @@ import { BookCard } from './components/BookCard';
 import { NewBookModal } from './components/NewBookModal';
 import { OCRViewerModal } from './components/OCRViewerModal';
 import { HumanReviewEditor } from './components/HumanReviewEditor';
-import { GlossaryManager } from './components/GlossaryManager';
 import { PrintPDFPreview } from './components/PrintPDFPreview';
 import { AuthModal } from './components/AuthModal';
 import { LandingPage } from './components/LandingPage';
@@ -253,7 +252,7 @@ export default function App() {
 
   // Navigation state
   const [currentView, setCurrentView] = useState<
-    'dashboard' | 'ocr' | 'review' | 'glossary' | 'print'
+    'dashboard' | 'ocr' | 'review' | 'print'
   >('dashboard');
   const [showLandingPage, setShowLandingPage] = useState<boolean>(true);
 
@@ -741,34 +740,18 @@ export default function App() {
     if (!selectedBook) return;
     setIsLoading(true);
     try {
-      let generatedGlossary: GlossaryTerm[] = [];
       try {
-        const res = await fetch(`/api/books/${selectedBook.id}/approve-structure`, {
+        await fetch(`/api/books/${selectedBook.id}/approve-structure`, {
           method: 'POST',
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.glossary && Array.isArray(data.glossary)) {
-            generatedGlossary = data.glossary;
-          }
-        }
       } catch (err) {
-        console.warn('Error getting approval glossary from server:', err);
-      }
-
-      if (generatedGlossary.length === 0) {
-        generatedGlossary = generateClientSideGlossary(weeks);
-      }
-
-      setGlossary(generatedGlossary);
-      if (currentUser) {
-        saveGlossaryToFirestore(selectedBook.id, generatedGlossary).catch(() => null);
+        console.warn('Error approving structure on server:', err);
       }
       await loadAuthor();
-      setCurrentView('glossary');
+      setCurrentView('print');
     } catch (err) {
       console.error('Error approving structure:', err);
-      setCurrentView('glossary');
+      setCurrentView('print');
     } finally {
       setIsLoading(false);
     }
@@ -896,29 +879,12 @@ export default function App() {
     );
   }
 
-  if (currentView === 'glossary' && selectedBook) {
-    return (
-      <GlossaryManager
-        book={selectedBook}
-        glossary={glossary}
-        onBack={() => setCurrentView('dashboard')}
-        onAddTerm={handleAddGlossaryTerm}
-        onUpdateTerm={handleUpdateGlossaryTerm}
-        onDeleteTerm={handleDeleteGlossaryTerm}
-        onReGenerate={async () => {
-          await handleApproveAndContinue();
-        }}
-      />
-    );
-  }
-
   if (currentView === 'print' && selectedBook) {
     return (
       <PrintPDFPreview
         book={selectedBook}
         author={author}
         weeks={weeks}
-        glossary={glossary}
         onBack={() => setCurrentView('dashboard')}
         onExportDocx={() => handleExportDocx(selectedBook)}
       />
@@ -1045,7 +1011,6 @@ export default function App() {
                     book={book}
                     onReview={() => handleOpenReviewView(book)}
                     onViewPages={() => handleOpenOCRView(book)}
-                    onGlossary={() => handleOpenGlossaryView(book)}
                     onExportDocx={() => handleExportDocx(book)}
                     onPrintPreview={() => handleOpenPrintView(book)}
                     onDelete={handleDeleteBook}

@@ -17,7 +17,6 @@ interface BookCardProps {
   book: Book;
   onReview: (book: Book) => void;
   onViewPages: (book: Book) => void;
-  onGlossary: (book: Book) => void;
   onExportDocx: (book: Book) => void;
   onPrintPreview: (book: Book) => void;
   onDelete: (bookId: string) => void;
@@ -68,7 +67,6 @@ export const BookCard: React.FC<BookCardProps> = ({
   book,
   onReview,
   onViewPages,
-  onGlossary,
   onExportDocx,
   onPrintPreview,
   onDelete,
@@ -137,15 +135,6 @@ export const BookCard: React.FC<BookCardProps> = ({
           >
             <FileText className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">OCR Pages</span>
-          </button>
-
-          <button
-            onClick={() => onGlossary(book)}
-            title="Manage Glossary Terms"
-            className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all text-xs font-medium flex items-center gap-1"
-          >
-            <BookMarked className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Glossary</span>
           </button>
         </div>
 
