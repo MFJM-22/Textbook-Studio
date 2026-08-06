@@ -475,43 +475,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
-        {/* CTA BANNER (Matching bottom banner style) */}
-        <section className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-purple-900 rounded-3xl p-8 sm:p-12 border border-indigo-500/40 shadow-2xl relative overflow-hidden text-center space-y-6">
-            
-            {/* Backdrop glow */}
-            <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-purple-500/30 rounded-full blur-3xl" />
-            <div className="absolute -left-10 -top-10 w-64 h-64 bg-blue-500/30 rounded-full blur-3xl" />
 
-            <div className="relative z-10 max-w-2xl mx-auto space-y-4">
-              <span className="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-semibold backdrop-blur-md inline-block">
-                Start Publishing Free Today
-              </span>
-              <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-                Ready to transform your teaching notes into published textbooks?
-              </h2>
-              <p className="text-xs sm:text-sm text-indigo-100 max-w-lg mx-auto leading-relaxed">
-                Join educators using Textbook Studio to build curriculum-compliant textbooks and save hundreds of hours per term.
-              </p>
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <button
-                  onClick={onGetStarted}
-                  id="cta-get-started-btn"
-                  className="w-full sm:w-auto px-8 py-3 bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2"
-                >
-                  <span>Launch Studio App</span>
-                  <ArrowRight className="w-4 h-4 text-indigo-600" />
-                </button>
-                <button
-                  onClick={onOpenAuth}
-                  className="w-full sm:w-auto px-6 py-3 bg-indigo-950/80 hover:bg-indigo-900 text-white font-semibold text-sm rounded-2xl border border-indigo-400/40 transition-all"
-                >
-                  Sign In / Create Account
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
 
       </div>
     </div>

@@ -63,9 +63,12 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isApproving, setIsApproving] = useState<boolean>(false);
 
-  // Sync weeks state if incoming prop updates
+  // Sync weeks state if incoming prop updates initially or if book ID changes
+  const lastSyncedWeeksRef = React.useRef<string>('');
   useEffect(() => {
-    if (weeks && weeks.length > 0) {
+    const serialized = JSON.stringify(weeks || []);
+    if (weeks && weeks.length > 0 && serialized !== lastSyncedWeeksRef.current) {
+      lastSyncedWeeksRef.current = serialized;
       setWeeksList(
         weeks.map((w) => ({
           ...w,
