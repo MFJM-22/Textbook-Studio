@@ -933,7 +933,7 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       {/* Header */}
       <Header
         author={author}
@@ -982,16 +982,16 @@ export default function App() {
         />
       ) : (
         /* Main Teacher Dashboard */
-        <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-8">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-4 sm:space-y-6">
           {/* Dashboard Content */}
           <div className="space-y-3 sm:space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
               <div>
-                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
                   Textbook Projects ({books.length})
                 </h3>
-                <p className="text-[11px] sm:text-xs text-slate-400">
+                <p className="text-[11px] sm:text-xs text-slate-500">
                   {currentUser
                     ? `Private projects for ${currentUser.email}`
                     : 'Manage lesson notes, review curriculum structures, and generate Word exports.'}
@@ -1005,20 +1005,20 @@ export default function App() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search subject or class..."
-                  className="w-full pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 bg-slate-50 border border-slate-200 rounded-full text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             </div>
 
             {isLoading ? (
-              <div className="py-12 sm:py-16 text-center text-slate-400 flex flex-col items-center gap-2">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+              <div className="py-12 sm:py-16 text-center text-slate-500 flex flex-col items-center gap-2 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
                 <span className="text-xs">Loading textbook projects...</span>
               </div>
             ) : filteredBooks.length === 0 ? (
-              <div className="p-8 sm:p-12 text-center bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
-                <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 text-slate-600 mx-auto" />
-                <h4 className="text-xs sm:text-sm font-bold text-slate-300">No textbook projects found</h4>
+              <div className="p-8 sm:p-12 text-center bg-white rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+                <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 text-slate-400 mx-auto" />
+                <h4 className="text-xs sm:text-sm font-bold text-slate-800">No textbook projects found</h4>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
                   {currentUser
                     ? 'You haven’t created any projects under your account yet. Create your first project to begin.'
@@ -1032,7 +1032,7 @@ export default function App() {
                       setIsNewBookModalOpen(true);
                     }
                   }}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-full shadow-xs"
                 >
                   Create First Textbook
                 </button>
