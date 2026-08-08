@@ -43,49 +43,24 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
           allowTaint: true,
           logging: false,
           onclone: (clonedDoc: Document) => {
-            sanitizeClonedDocForPdf(clonedDoc);
+            try {
+              sanitizeClonedDocForPdf(clonedDoc);
+            } catch (e) {
+              console.warn('Error sanitizing cloned doc:', e);
+            }
           },
         },
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const },
         pagebreak: { mode: ['css', 'legacy'] },
       };
 
-      const worker = html2pdfRunner().set(opt).from(element);
-      const pdfBlob = await worker.outputContainer('blob');
-
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
+      await html2pdfRunner().set(opt).from(element).save();
     } catch (err) {
-      console.error('Blob PDF export error, falling back to direct save:', err);
+      console.error('PDF export error:', err);
       try {
-        const html2pdfRunner = (html2pdf as any).default || html2pdf;
-        const filename = `${(book.title || 'Textbook').replace(/[^a-z0-9]/gi, '_')}.pdf`;
-        const opt = {
-          margin: [0.3, 0.4, 0.3, 0.4] as [number, number, number, number],
-          filename: filename,
-          image: { type: 'jpeg' as const, quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            logging: false,
-            onclone: (clonedDoc: Document) => {
-              sanitizeClonedDocForPdf(clonedDoc);
-            },
-          },
-          jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const },
-          pagebreak: { mode: ['css', 'legacy'] },
-        };
-        await html2pdfRunner().set(opt).from(element).save();
-      } catch (saveErr) {
-        alert('Could not download PDF directly. Opening print dialog to Save as PDF.');
         window.print();
+      } catch (printErr) {
+        console.error('Print dialog error:', printErr);
       }
     } finally {
       setIsGeneratingPdf(false);

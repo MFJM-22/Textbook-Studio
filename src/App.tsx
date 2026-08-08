@@ -37,149 +37,92 @@ import {
   fetchGlossaryFromFirestore,
 } from './lib/firestoreService';
 
-function generateDetailedClientNotes(bookTitle: string, subject: string, pageNum: number): string {
-  const cleanSubject = subject || 'Integrated Science';
-  const cleanTitle = bookTitle || `${cleanSubject} Textbook`;
-  return `WEEK ${pageNum}: ${cleanTitle} - Core Lesson Unit ${pageNum}
-
-TOPIC: ${cleanSubject} Fundamental Concepts & Practical Applications
-
-1. Introduction & Objectives
-${cleanTitle} provides structured guidance on basic principles, experimental observations, and systematic analysis. Students will memorize key definitions and practice unit conversions.
-
-2. Key Terms & Classifications
-- Fundamental Principle: Core scientific rule or concept governing natural phenomena.
-- SI Base Units: International standard metrics used to measure physical parameters accurately.
-- Laboratory Observation: Qualitative and quantitative recording of experimental findings.
-
-3. Classification & Summary Table
-| Category / Element | Practical Description | Standard Metric / Symbol |
-| --- | --- | --- |
-| Unit A | Base Fundamental Metric | Standard Unit (SI) |
-| Unit B | Derived Physical Property | Compound Metric |
-| Unit C | Empirical Measurement | Quantitative Data |
-
-4. Exercises & Review Questions
-- Question 1: Outline three reasons why standard units are essential in ${cleanSubject}.
-- Question 2: Complete the unit exercise table on page ${pageNum * 10} of your workbook.`;
+function getCleanFallbackText(subject: string, pageNum: number): string {
+  return `Scanned page ${pageNum} for ${subject || 'lesson notes'}. Edit text or re-analyze OCR if needed.`;
 }
 
 function structurePagesIntoWeeks(pages: Page[], book: Book): Week[] {
-  if (pages && pages.length > 0) {
-    const validPages = pages.filter((p) => {
-      const txt = (p.raw_ocr_text || '').trim();
-      return txt.length > 0 && !txt.toLowerCase().includes('scanned lesson note page');
-    });
+  if (!pages || pages.length === 0) return [];
 
-    if (validPages.length > 0) {
-      return validPages.map((p, idx) => {
-        const text = (p.raw_ocr_text || '').trim();
-        const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-        let topic = `Week ${idx + 1}: ${book.subject || 'Lesson Unit'}`;
-        if (lines.length > 0) {
-          const candidate = lines.find((l) => /^week|\btopic\b/i.test(l)) || lines[0];
-          if (candidate && !candidate.startsWith('|')) {
-            topic = candidate.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim();
-          }
-        }
+  return pages.map((p, idx) => {
+    const text = (p.raw_ocr_text || '').trim();
+    if (!text || text.includes('Scanned page') || text.includes('No text could be extracted')) {
+      return {
+        id: `w-struct-${Date.now()}-${idx + 1}`,
+        book_id: book.id,
+        week_number: idx + 1,
+        topic: `Week ${idx + 1}: ${book.subject || 'Lesson Unit'}`,
+        content_json: [
+          {
+            subheading: 'Lesson Content',
+            paragraphs: ['Lesson notes uploaded for this unit.'],
+          },
+        ],
+        created_at: new Date().toISOString(),
+      };
+    }
 
-        const sections: { subheading: string; paragraphs: string[] }[] = [];
-        let currentSubheading = 'Lesson Content & Notes';
-        let currentParagraphs: string[] = [];
-        let tableBuffer: string[] = [];
+    const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+    let topic = `Week ${idx + 1}: ${book.subject || 'Lesson Unit'}`;
+    if (lines.length > 0) {
+      const candidate = lines.find((l) => /^week|\btopic\b/i.test(l)) || lines[0];
+      if (candidate && !candidate.startsWith('|')) {
+        topic = candidate.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim();
+      }
+    }
 
-        const flushTable = () => {
-          if (tableBuffer.length > 0) {
-            currentParagraphs.push(tableBuffer.join('\n'));
-            tableBuffer = [];
-          }
-        };
+    const sections: { subheading: string; paragraphs: string[] }[] = [];
+    let currentSubheading = 'Lesson Content & Notes';
+    let currentParagraphs: string[] = [];
+    let tableBuffer: string[] = [];
 
-        const flushSection = () => {
-          flushTable();
-          if (currentParagraphs.length > 0) {
-            sections.push({ subheading: currentSubheading, paragraphs: [...currentParagraphs] });
-            currentParagraphs = [];
-          }
-        };
+    const flushTable = () => {
+      if (tableBuffer.length > 0) {
+        currentParagraphs.push(tableBuffer.join('\n'));
+        tableBuffer = [];
+      }
+    };
 
-        for (const line of lines) {
-          if (line.startsWith('|') && (line.endsWith('|') || line.includes('|', 1))) {
-            tableBuffer.push(line);
-            continue;
-          }
-          flushTable();
-          if (line.startsWith('#') || line.startsWith('WEEK') || line.startsWith('TOPIC:') || (line.endsWith(':') && line.length < 60)) {
-            flushSection();
-            const sub = line.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim();
-            if (sub) currentSubheading = sub;
-          } else {
-            currentParagraphs.push(line);
-          }
-        }
+    const flushSection = () => {
+      flushTable();
+      if (currentParagraphs.length > 0) {
+        sections.push({ subheading: currentSubheading, paragraphs: [...currentParagraphs] });
+        currentParagraphs = [];
+      }
+    };
+
+    for (const line of lines) {
+      if (line.startsWith('|') && (line.endsWith('|') || line.includes('|', 1))) {
+        tableBuffer.push(line);
+        continue;
+      }
+      flushTable();
+      if (line.startsWith('#') || line.startsWith('WEEK') || line.startsWith('TOPIC:') || (line.endsWith(':') && line.length < 60)) {
         flushSection();
+        const sub = line.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim();
+        if (sub) currentSubheading = sub;
+      } else {
+        currentParagraphs.push(line);
+      }
+    }
+    flushSection();
 
-        if (sections.length === 0) {
-          sections.push({
-            subheading: 'Transcribed Lesson Notes',
-            paragraphs: lines.length > 0 ? lines : ['Extracted content from scanned notes.'],
-          });
-        }
-
-        return {
-          id: `w-struct-${Date.now()}-${idx + 1}`,
-          book_id: book.id,
-          week_number: idx + 1,
-          topic: topic || `Week ${idx + 1} Unit`,
-          content_json: sections,
-          created_at: new Date().toISOString(),
-        };
+    if (sections.length === 0) {
+      sections.push({
+        subheading: 'Transcribed Lesson Notes',
+        paragraphs: lines.length > 0 ? lines : ['Extracted content from scanned notes.'],
       });
     }
-  }
 
-  // Fallback: Generate structured subject weeks if no page text present
-  const subjectName = book.subject || book.title || 'Integrated Science';
-  return [
-    {
-      id: `w-gen-${Date.now()}-1`,
+    return {
+      id: `w-struct-${Date.now()}-${idx + 1}`,
       book_id: book.id,
-      week_number: 1,
-      topic: `${subjectName} - Unit 1: Foundations & Core Concepts`,
-      content_json: [
-        {
-          subheading: 'Introduction & Key Learning Outcomes',
-          paragraphs: [
-            `Welcome to ${book.title || subjectName}. In this initial unit, students explore fundamental principles, definitions, and laboratory/classroom safety standards.`,
-            `Key Objectives: Memorize core terminology, examine unit classifications, and solve practical exercise questions.`,
-          ],
-        },
-        {
-          subheading: 'Classification & Comparative Data',
-          paragraphs: [
-            '| Category | Description | Primary Unit / Symbol |\n| --- | --- | --- |\n| Unit A | Fundamental Measurement | Standard Metric (SI) |\n| Unit B | Compound Element | Symbols & Multiples |\n| Unit C | Observation Log | Quantitative Data |',
-          ],
-        },
-      ],
+      week_number: idx + 1,
+      topic: topic || `Week ${idx + 1} Unit`,
+      content_json: sections,
       created_at: new Date().toISOString(),
-    },
-    {
-      id: `w-gen-${Date.now()}-2`,
-      book_id: book.id,
-      week_number: 2,
-      topic: `${subjectName} - Unit 2: Advanced Applications & Practice`,
-      content_json: [
-        {
-          subheading: 'Core Theories & Analytical Models',
-          paragraphs: [
-            'Detailed analysis of key principles, real-world case studies, and step-by-step problem-solving methods.',
-            'Students work in groups to verify findings and complete week 2 review assignments.',
-          ],
-        },
-      ],
-      created_at: new Date().toISOString(),
-    },
-  ];
+    };
+  });
 }
 
 function generateClientSideGlossary(weeks: Week[]): GlossaryTerm[] {
@@ -496,7 +439,7 @@ export default function App() {
             book_id: userBook.id,
             page_order: idx + 1,
             image_url: fItem.image_data || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
-            raw_ocr_text: fItem.raw_text || generateDetailedClientNotes(userBook.title, userBook.subject, idx + 1),
+            raw_ocr_text: fItem.raw_text || getCleanFallbackText(userBook.subject, idx + 1),
             ocr_confidence: 0.95,
             status: 'completed',
             created_at: new Date().toISOString(),

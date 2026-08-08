@@ -73,32 +73,9 @@ function getOrCreateBook(id: string, meta?: Partial<Book>): Book {
   return book;
 }
 
-// Fallback generator for rich, subject-tailored OCR text if Gemini Vision is unconfigured or returns empty
-function generateDetailedNotesForSubject(bookTitle: string, subject: string, pageNum: number): string {
-  const cleanSubject = subject || 'Integrated Science';
-  const cleanTitle = bookTitle || `${cleanSubject} JHS`;
-  return `WEEK ${pageNum}: ${cleanTitle} - Core Lesson Unit ${pageNum}
-
-TOPIC: ${cleanSubject} Fundamentals & Applications
-
-1. Introduction & Core Objectives
-${cleanTitle} covers foundational principles, systematic analysis, and classroom experiment procedures. Students will investigate fundamental concepts, examine real-world examples, and apply analytical rules.
-
-2. Essential Definitions & Key Rules
-- Principle Definition: Fundamental rule or law forming the foundation for scientific reasoning.
-- SI Metric System: International system of units used to measure mass, length, volume, and temperature accurately.
-- Experimental Observation: Recording qualitative and quantitative findings during laboratory investigations.
-
-3. Classification & Comparative Data Table
-| Element / Category | Functional Description | Primary Unit / Symbol |
-| --- | --- | --- |
-| Category A | Core Fundamental Measurement | Standard Metric (SI) |
-| Category B | Derived Physical Property | Compound Unit |
-| Category C | Experimental Observation | Empirical Record |
-
-4. Review Questions & Exercises
-- Question 1: State three reasons why accurate measurement is necessary in ${cleanSubject}.
-- Question 2: Complete the unit exercise table on page ${pageNum * 12} of your JHS workbook.`;
+// Helper for clean fallback text if OCR extraction returns empty
+function getCleanFallbackText(subject: string, pageNum: number): string {
+  return `Scanned page ${pageNum} for ${subject || 'lesson notes'}. Edit text or re-run OCR if needed.`;
 }
 
 // --- API ENDPOINTS ---
@@ -263,19 +240,23 @@ app.post('/api/books/:id/upload-pages', async (req, res) => {
     if (!pItem.raw_text && imgSrc) {
       try {
         const ai = getGenAI();
-        let promptText = "Transcribe all handwritten and typed text from this lesson note page accurately. Include headings, bullet points, formulas, and any tables formatted as Markdown tables (| Col 1 | Col 2 |). Do NOT summarize or skip details.";
+        const promptText = "Transcribe all handwritten and typed text from this lesson note page image accurately and completely. Include all headings, bullet points, formulas, diagrams/labels, and tables (formatted as Markdown tables). Extract ONLY what is visible in the image. Do NOT summarize, modify, fabricate, or add any unwritten content.";
 
-        let contentInput: any = promptText;
+        let contentInput: any;
 
         if (imgSrc.startsWith('data:image')) {
           const base64Parts = imgSrc.split(',');
           const mimeType = base64Parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
           const base64Data = base64Parts[1];
 
-          contentInput = [
-            { inlineData: { mimeType, data: base64Data } },
-            { text: promptText },
-          ];
+          contentInput = {
+            parts: [
+              { inlineData: { mimeType, data: base64Data } },
+              { text: promptText },
+            ],
+          };
+        } else {
+          contentInput = promptText;
         }
 
         const response = await ai.models.generateContent({
@@ -284,19 +265,17 @@ app.post('/api/books/:id/upload-pages', async (req, res) => {
         });
 
         const extractedText = (response.text || '').trim();
-        pageObj.raw_ocr_text = extractedText && extractedText.length > 10 
-          ? extractedText 
-          : generateDetailedNotesForSubject(book.title, book.subject, pageObj.page_order);
-        pageObj.ocr_confidence = 0.96;
+        pageObj.raw_ocr_text = extractedText || pItem.raw_text || getCleanFallbackText(book.subject, pageObj.page_order);
+        pageObj.ocr_confidence = extractedText ? 0.96 : 0.60;
         pageObj.status = 'completed';
       } catch (err: any) {
         console.error('OCR Error on page:', err);
-        pageObj.raw_ocr_text = pItem.raw_text || generateDetailedNotesForSubject(book.title, book.subject, pageObj.page_order);
-        pageObj.ocr_confidence = 0.88;
+        pageObj.raw_ocr_text = pItem.raw_text || getCleanFallbackText(book.subject, pageObj.page_order);
+        pageObj.ocr_confidence = 0.60;
         pageObj.status = 'completed';
       }
     } else if (!pageObj.raw_ocr_text) {
-      pageObj.raw_ocr_text = generateDetailedNotesForSubject(book.title, book.subject, pageObj.page_order);
+      pageObj.raw_ocr_text = getCleanFallbackText(book.subject, pageObj.page_order);
       pageObj.status = 'completed';
     } else {
       pageObj.status = 'completed';
@@ -382,21 +361,23 @@ app.post('/api/books/:id/structure', async (req, res) => {
   });
 
   contentsInput.push({
-    text: `${promptTextBuffer}\nExamine the attached scanned note page images and transcribed text above. Extract and structure all handwritten/typed lesson content into structured week curriculum units. Preserve all tables as Markdown tables (| Col 1 | Col 2 |).`
+    text: `${promptTextBuffer}\nExamine the attached scanned note page images and transcribed text above. Extract and structure ONLY the handwritten/typed lesson content present in the uploaded material into week curriculum units. Preserve all tables as Markdown tables (| Col 1 | Col 2 |). DO NOT fabricate or generate unrequested extra weeks.`
   });
 
   try {
     const ai = getGenAI();
 
     const systemPrompt = `You are a curriculum structure AI assistant for school textbook publishing.
-CRITICAL INSTRUCTIONS:
-1. Extract week-by-week units from the raw notes provided or the scanned note images.
-2. CRITICAL TABLE PRESERVATION: Capture all tables, element classifications, and tabular data! Format every table as a single Markdown table block string (| Header 1 | Header 2 |\n| --- | --- |\n| Row 1 Col 1 | Row 1 Col 2 |) inside paragraphs.
-3. Keep all lesson content detailed and organized under subheadings.
+CRITICAL MANDATES:
+1. STRICT ADHERENCE TO SOURCE MATERIAL: Rely ONLY on the provided notes and scanned page images. Transcribe and structure ONLY the content that actually appears in the input.
+2. NO FABRICATION / NO EXPANSION: Do NOT invent, hallucinate, or fabricate any extra lessons, topics, formulas, or weeks that are not present in the user's uploaded material.
+3. EXACT WEEK COUNT: If the uploaded material only covers 1 week (e.g. Week 1), return EXACTLY 1 week in the output array. Do NOT extrapolate or generate extra weeks up to Week 12.
+4. TABLE PRESERVATION: Capture all tables and tabular data as Markdown tables (| Header 1 | Header 2 |\n| --- | --- |\n| Row 1 | Row 2 |).
+5. Keep all lesson content detailed and organized under subheadings based strictly on the source text.
 
 Structure the extracted notes into an array of Weeks. Each Week must have:
 - week_number (number, e.g. 1, 2, 3...)
-- topic (short topic name)
+- topic (short topic name extracted directly from the notes)
 - content_json: array of section objects, each having:
   - subheading (string)
   - paragraphs (array of strings, including any formatted Markdown table blocks)
