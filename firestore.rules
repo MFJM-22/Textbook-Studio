@@ -24,6 +24,14 @@ service cloud.firestore {
       allow create, update, delete: if isSignedIn() && request.auth.uid == userId;
     }
 
+    match /users/{userId} {
+      allow get, list, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+
+      match /profile/{profileId} {
+        allow get, list, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
     match /books/{bookId} {
       allow get: if isSignedIn() && isValidId(bookId) && resource.data.userId == request.auth.uid;
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;

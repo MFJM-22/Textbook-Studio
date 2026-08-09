@@ -190,14 +190,14 @@ export async function fetchGlossaryFromFirestore(bookId: string): Promise<Glossa
 
 // Save Author Profile for User
 export async function saveAuthorToFirestore(author: Author, userId: string): Promise<void> {
-  const path = `authors/${userId}`;
+  const path = `users/${userId}/profile/info`;
   try {
     const authorData = {
       ...author,
       userId,
       updatedAt: new Date().toISOString(),
     };
-    await setDoc(doc(db, 'authors', userId), authorData, { merge: true });
+    await setDoc(doc(db, 'users', userId, 'profile', 'info'), authorData, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -205,11 +205,16 @@ export async function saveAuthorToFirestore(author: Author, userId: string): Pro
 
 // Fetch Author Profile for User
 export async function fetchAuthorFromFirestore(userId: string): Promise<Author | null> {
-  const path = `authors/${userId}`;
+  const path = `users/${userId}/profile/info`;
   try {
-    const snapshot = await getDoc(doc(db, 'authors', userId));
+    const snapshot = await getDoc(doc(db, 'users', userId, 'profile', 'info'));
     if (snapshot.exists()) {
       return snapshot.data() as Author;
+    }
+    // Fallback migration check on legacy paths
+    const oldSnapshot = await getDoc(doc(db, 'authors', userId));
+    if (oldSnapshot.exists()) {
+      return oldSnapshot.data() as Author;
     }
     return null;
   } catch (error) {

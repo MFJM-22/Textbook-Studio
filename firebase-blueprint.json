@@ -77,6 +77,12 @@
         "$ref": "#/entities/Week"
       },
       "description": "Weekly modules for a textbook"
+    },
+    "/users/{userId}/profile/{profileId}": {
+      "schema": {
+        "$ref": "#/entities/Book"
+      },
+      "description": "User profile and author information"
     }
   }
 }

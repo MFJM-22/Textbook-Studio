@@ -103,7 +103,7 @@ async function extractTextFromImageWithGemini(imgSrc: string, promptText: string
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: [
         {
           role: 'user',
@@ -416,7 +416,7 @@ Structure the extracted notes into an array of Weeks. Each Week must have:
 Return strictly valid JSON corresponding to this schema.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: contentsInput,
       config: {
         systemInstruction: systemPrompt,
@@ -630,7 +630,7 @@ app.post('/api/books/:id/approve-structure', async (req, res) => {
     const prompt = `Extract a list of 5 to 15 key technical terms, vocabulary words, and concepts with clear concise definitions from the following textbook material:\n\n${textContent}`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
