@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { Printer, ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
-import html2pdf from 'html2pdf.js';
 import { Author, Book, Week, GlossaryTerm } from '../types';
 import { parseMarkdownTable } from '../lib/docGenerator';
-import { sanitizeClonedDocForPdf } from '../lib/pdfUtils';
 
 interface PrintPDFPreviewProps {
   book: Book;
@@ -24,39 +22,32 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const handleDownloadPdf = async () => {
-    const element = document.getElementById('printable-textbook-content');
-    if (!element) {
-      window.print();
-      return;
-    }
     setIsGeneratingPdf(true);
     try {
-      const html2pdfRunner = (html2pdf as any).default || html2pdf;
-      const filename = `${(book.title || 'Textbook').replace(/[^a-z0-9]/gi, '_')}.pdf`;
-      const opt = {
-        margin: [0.3, 0.4, 0.3, 0.4] as [number, number, number, number],
-        filename: filename,
-        image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          onclone: (clonedDoc: Document) => {
-            try {
-              sanitizeClonedDocForPdf(clonedDoc);
-            } catch (e) {
-              console.warn('Error sanitizing cloned doc:', e);
-            }
-          },
+      const response = await fetch(`/api/books/${book.id}/generate-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const },
-        pagebreak: { mode: ['css', 'legacy'] },
-      };
+      });
 
-      await html2pdfRunner().set(opt).from(element).save();
+      if (!response.ok) {
+        throw new Error(`Server returned status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const filename = `${(book.title || 'Textbook').replace(/[^a-zA-Z0-9_\-]/g, '_')}.pdf`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
     } catch (err) {
-      console.error('PDF export error:', err);
+      console.error('Server PDF generation error:', err);
+      // Fallback to browser print/save as PDF if server endpoint fails
       try {
         window.print();
       } catch (printErr) {

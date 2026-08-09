@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { generateBookDocx, normalizeContentSections } from './src/lib/docGenerator';
+import { generateBookPdf } from './src/lib/pdfGenerator';
 import { Author, Book, Page, Week, GlossaryTerm, SampleNote } from './src/types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -728,6 +729,70 @@ app.post('/api/books/:id/generate-docx', async (req, res) => {
   } catch (err: any) {
     console.error('Docx Export Failure:', err);
     res.status(500).json({ error: 'Failed to generate Word document' });
+  }
+});
+
+// 11. Generate PDF Export Endpoint
+app.post('/api/books/:id/generate-pdf', async (req, res) => {
+  const bookId = req.params.id;
+  const book = getOrCreateBook(bookId);
+
+  let weeks = weeksStore.filter((w) => w.book_id === bookId).sort((a, b) => a.week_number - b.week_number);
+  const glossary = glossaryStore.filter((g) => g.book_id === bookId);
+
+  // If no weeks exist yet, auto-generate default lesson units from pages or fallback
+  if (weeks.length === 0) {
+    const pages = pagesStore.filter((p) => p.book_id === bookId);
+    if (pages.length > 0) {
+      weeks = pages.map((p, idx) => ({
+        id: `w-auto-${Date.now()}-${idx + 1}`,
+        book_id: bookId,
+        week_number: idx + 1,
+        topic: `Unit ${idx + 1}: Lesson Overview`,
+        content_json: normalizeContentSections([
+          {
+            subheading: `Lesson Summary (Page ${p.page_order})`,
+            paragraphs: (p.raw_ocr_text || 'Core lesson material.').split('\n').filter((l) => l.trim().length > 0),
+          },
+        ]),
+        created_at: new Date().toISOString(),
+      }));
+    } else {
+      weeks = [
+        {
+          id: `w-default-${Date.now()}-1`,
+          book_id: bookId,
+          week_number: 1,
+          topic: `Week 1: Introduction to ${book.subject}`,
+          content_json: normalizeContentSections([
+            {
+              subheading: 'Fundamental Concepts & Curriculum Overview',
+              paragraphs: [
+                `Welcome to ${book.title} (${book.class_level}, ${book.term}).`,
+                'This textbook module includes core curriculum units, structured table visualizations, and key terms glossary.',
+              ],
+            },
+          ]),
+          created_at: new Date().toISOString(),
+        },
+      ];
+    }
+    // Save to store
+    weeks.forEach((w) => weeksStore.push(w));
+  }
+
+  try {
+    const pdfBuffer = await generateBookPdf(book, currentAuthor, weeks, glossary);
+
+    book.status = 'generated';
+
+    const sanitizeFilename = (book.title || 'Textbook').replace(/[^a-zA-Z0-9_\-]/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err: any) {
+    console.error('PDF Export Failure:', err);
+    res.status(500).json({ error: 'Failed to generate PDF document' });
   }
 });
 

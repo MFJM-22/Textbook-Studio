@@ -146,35 +146,35 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden border border-slate-200/80 animate-in fade-in zoom-in-95 duration-150">
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-50/80 border-b border-slate-100 text-slate-900">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-              <BookOpen className="w-4 h-4" />
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="glass-panel rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-white/10 text-white animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between px-6 py-4 bg-white/[0.03] border-b border-white/10 text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <BookOpen className="w-5 h-5" />
             </div>
-            <h2 className="font-bold text-base text-slate-900">New Textbook Project</h2>
+            <h2 className="font-bold text-lg font-display text-white">New Textbook Project</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-full transition-colors"
+            className="text-slate-400 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {samples.length > 0 && (
-          <div className="flex border-b border-slate-100 bg-slate-50/50 px-6 pt-3 gap-2">
+          <div className="flex border-b border-white/10 bg-black/20 px-6 pt-3 gap-2">
             <button
               type="button"
               onClick={() => setActiveTab('sample')}
               className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all ${
                 activeTab === 'sample'
-                  ? 'bg-white text-indigo-600 border-t-2 border-indigo-600 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white/10 text-emerald-400 border-t-2 border-emerald-400 font-bold'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Sparkles className="w-4 h-4 text-amber-500" />
+              <Sparkles className="w-4 h-4 text-emerald-400" />
               Use Demo Teacher Notes Dataset
             </button>
 
@@ -183,11 +183,11 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
               onClick={() => setActiveTab('custom')}
               className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all ${
                 activeTab === 'custom'
-                  ? 'bg-white text-indigo-600 border-t-2 border-indigo-600 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white/10 text-emerald-400 border-t-2 border-emerald-400 font-bold'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Upload className="w-4 h-4 text-indigo-500" />
+              <Upload className="w-4 h-4 text-emerald-400" />
               Upload Scanned Notes / Text
             </button>
           </div>
@@ -196,8 +196,8 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
           {activeTab === 'sample' ? (
             <div className="space-y-4">
-              <p className="text-xs text-slate-600 bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-100/80 leading-relaxed">
-                Select a pre-loaded teacher notes package to immediately test the OCR pipeline, AI week-by-week structuring, glossary builder, and Word/PDF publishing!
+              <p className="text-xs text-slate-300 glass-panel p-4 rounded-2xl border border-white/10 leading-relaxed">
+                Select a pre-loaded teacher notes package to immediately test the OCR vision pipeline, AI week-by-week structuring, glossary builder, and Word/PDF publishing!
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -207,22 +207,22 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
                     onClick={() => setSelectedSampleId(s.id)}
                     className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                       selectedSampleId === s.id
-                        ? 'border-indigo-600 bg-indigo-50/40 shadow-xs'
-                        : 'border-slate-200/80 hover:border-indigo-300 bg-slate-50/30'
+                        ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                        : 'border-white/10 hover:border-emerald-500/40 bg-white/[0.02]'
                     }`}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100/80 text-indigo-700">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full glass-pill border border-emerald-500/30">
                         {s.subject} • {s.class_level}
                       </span>
                       {selectedSampleId === s.id && (
-                        <Check className="w-4 h-4 text-indigo-600" />
+                        <Check className="w-4 h-4 text-emerald-400" />
                       )}
                     </div>
-                    <h4 className="font-bold text-slate-900 text-sm mb-1">{s.title}</h4>
-                    <p className="text-xs text-slate-500 line-clamp-2">{s.description}</p>
-                    <div className="mt-3 text-[11px] text-slate-400 flex items-center gap-1">
-                      <FileText className="w-3.5 h-3.5" />
+                    <h4 className="font-bold text-white text-sm mb-1 font-display">{s.title}</h4>
+                    <p className="text-xs text-slate-400 line-clamp-2">{s.description}</p>
+                    <div className="mt-3 text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                      <FileText className="w-3.5 h-3.5 text-emerald-400" />
                       {s.sample_pages.length} pages of scanned notes
                     </div>
                   </div>
@@ -233,33 +233,33 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Subject *</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Subject *</label>
                   <input
                     type="text"
                     required
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     placeholder="e.g. Chemistry"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-full text-xs focus:ring-2 focus:ring-indigo-500/50"
+                    className="w-full px-4 py-2.5 bg-white/5 text-white placeholder:text-slate-500 border border-white/10 rounded-full text-xs focus:ring-2 focus:ring-emerald-500/50"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Class Level *</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Class Level *</label>
                   <input
                     type="text"
                     required
                     value={classLevel}
                     onChange={(e) => setClassLevel(e.target.value)}
                     placeholder="e.g. Grade 11"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-full text-xs focus:ring-2 focus:ring-indigo-500/50"
+                    className="w-full px-4 py-2.5 bg-white/5 text-white placeholder:text-slate-500 border border-white/10 rounded-full text-xs focus:ring-2 focus:ring-emerald-500/50"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Term *</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Term *</label>
                   <select
                     value={term}
                     onChange={(e) => setTerm(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 border border-slate-200 rounded-full text-xs focus:ring-2 focus:ring-indigo-500/50"
+                    className="w-full px-4 py-2.5 bg-[#0b0f17] text-white border border-white/10 rounded-full text-xs focus:ring-2 focus:ring-emerald-500/50"
                   >
                     <option value="1st Term">1st Term</option>
                     <option value="2nd Term">2nd Term</option>
@@ -269,22 +269,22 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Textbook Title</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">Textbook Title</label>
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={`e.g. ${classLevel} ${subject} Coursebook`}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-full text-xs focus:ring-2 focus:ring-indigo-500/50"
+                  className="w-full px-4 py-2.5 bg-white/5 text-white placeholder:text-slate-500 border border-white/10 rounded-full text-xs focus:ring-2 focus:ring-emerald-500/50"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Upload Scanned Pages (Images)</label>
-                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center hover:bg-slate-50/50 transition-colors bg-slate-50/30">
-                  <Upload className="w-6 h-6 text-slate-400 mx-auto mb-2" />
-                  <p className="text-xs text-slate-700 font-medium">Click to upload scanned handwritten note images</p>
-                  <p className="text-[11px] text-slate-400 mb-2">Supports JPG, PNG, WEBP</p>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">Upload Scanned Pages (Images)</label>
+                <div className="border-2 border-dashed border-white/15 rounded-2xl p-5 text-center hover:bg-white/5 transition-colors bg-white/[0.02]">
+                  <Upload className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
+                  <p className="text-xs text-slate-200 font-medium">Click to upload scanned handwritten note images</p>
+                  <p className="text-[11px] text-slate-400 mb-3">Supports JPG, PNG, WEBP</p>
                   <input
                     type="file"
                     multiple
@@ -295,7 +295,7 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
                   />
                   <label
                     htmlFor="page-images-input"
-                    className="inline-block px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-full cursor-pointer hover:bg-slate-800 shadow-xs"
+                    className="inline-block px-5 py-2 btn-emerald text-xs font-bold cursor-pointer shadow-md"
                   >
                     Select Page Files
                   </label>
@@ -303,9 +303,9 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
                   {uploadedImages.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2 justify-center">
                       {uploadedImages.map((img, i) => (
-                        <div key={i} className="relative w-12 h-12 rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                        <div key={i} className="relative w-12 h-12 rounded-xl border border-white/20 overflow-hidden shadow-xs">
                           <img src={img.image_data} alt={`Upload ${i}`} className="w-full h-full object-cover" />
-                          <span className="absolute bottom-0 right-0 bg-indigo-600 text-white text-[9px] px-1 font-bold">
+                          <span className="absolute bottom-0 right-0 bg-emerald-500 text-slate-950 text-[9px] px-1 font-bold">
                             #{i + 1}
                           </span>
                         </div>
@@ -316,31 +316,31 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Or Paste Raw Typed Notes</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">Or Paste Raw Typed Notes</label>
                 <textarea
                   rows={4}
                   value={customTextNotes}
                   onChange={(e) => setCustomTextNotes(e.target.value)}
                   placeholder="Paste teacher lesson outline text, tables, or notes here..."
-                  className="w-full p-3 bg-slate-50 text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-2xl text-xs font-mono focus:ring-2 focus:ring-indigo-500/50"
+                  className="w-full p-3.5 bg-white/5 text-white placeholder:text-slate-500 border border-white/10 rounded-2xl text-xs font-mono focus:ring-2 focus:ring-emerald-500/50"
                 />
               </div>
             </div>
           )}
 
           {error && (
-            <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+            <div className="p-3.5 bg-red-500/10 border border-red-500/30 rounded-2xl text-xs text-red-300 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
               <span>{error}</span>
             </div>
           )}
 
-          <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
+          <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
             <button
               type="button"
               disabled={isSubmitting}
               onClick={onClose}
-              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-full text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+              className="px-5 py-2 btn-glass text-xs font-medium disabled:opacity-50"
             >
               Cancel
             </button>
@@ -348,11 +348,11 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
               type="submit"
               disabled={isSubmitting}
               id="confirm-create-book-btn"
-              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-full text-xs font-semibold hover:bg-indigo-700 shadow-xs disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-2 btn-emerald text-xs font-bold disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
                   <span>Processing Notes & OCR...</span>
                 </>
               ) : (
@@ -368,3 +368,4 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
     </div>
   );
 };
+
