@@ -14,9 +14,13 @@ import {
   ZoomOut,
   Maximize2,
   Loader2,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { Book, Page } from '../types';
 import { AIProgressStepper, ProgressStep } from './AIProgressStepper';
+import { processUploadedFiles } from '../lib/pdfUploader';
 
 const structuringSteps: ProgressStep[] = [
   { id: 'audit', label: '1. OCR Audit', description: 'Validating transcribed notes & markdown tables' },
@@ -62,6 +66,36 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
   const [showAddTextInput, setShowAddTextInput] = useState<boolean>(false);
   const [newCustomNotes, setNewCustomNotes] = useState<string>('');
   const [zoomLevel, setZoomLevel] = useState<number>(100);
+
+  // Reordering State
+  const [orderedPages, setOrderedPages] = useState<Page[]>(pages);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setOrderedPages(pages);
+  }, [pages]);
+
+  const movePage = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= orderedPages.length) return;
+    setOrderedPages((prevPages) => {
+      const updated = [...prevPages];
+      const [movedItem] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, movedItem);
+      return updated.map((item, idx) => ({
+        ...item,
+        page_order: idx + 1,
+      }));
+    });
+
+    if (selectedPageIndex === fromIndex) {
+      setSelectedPageIndex(toIndex);
+    } else if (selectedPageIndex > fromIndex && selectedPageIndex <= toIndex) {
+      setSelectedPageIndex(selectedPageIndex - 1);
+    } else if (selectedPageIndex < fromIndex && selectedPageIndex >= toIndex) {
+      setSelectedPageIndex(selectedPageIndex + 1);
+    }
+  };
 
   // Stepper Progress State
   const [structuringProgress, setStructuringProgress] = useState(0);
@@ -135,7 +169,7 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentPage = pages[selectedPageIndex] || pages[0];
+  const currentPage = orderedPages[selectedPageIndex] || orderedPages[0];
 
   // Keep editedText synced when selected page changes
   useEffect(() => {
@@ -218,22 +252,18 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
 
     setIsUploadingMore(true);
     try {
-      const fileList: { image_data: string }[] = [];
-      for (const f of Array.from(files) as File[]) {
-        const compressedData = await compressImage(f);
-        if (compressedData) {
-          fileList.push({ image_data: compressedData });
-        }
-      }
+      const pageList = await processUploadedFiles(Array.from(files) as File[]);
+      const validPages = pageList.filter((f) => f.image_data).map((f) => ({ image_data: f.image_data!, raw_text: f.raw_text }));
 
-      if (fileList.length > 0) {
-        await onUploadMorePages(fileList);
+      if (validPages.length > 0) {
+        await onUploadMorePages(validPages);
         setSelectedPageIndex(pages.length); // focus on newly added page
       }
     } catch (err) {
       console.error('Error adding more files:', err);
     } finally {
       setIsUploadingMore(false);
+      e.target.value = '';
     }
   };
 
@@ -276,12 +306,12 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
               onClick={async () => {
                 setIsStructuring(true);
                 try {
-                  // Perform sanity check on pages prop before passing to handleOpenReviewView
-                  let checkedPages = Array.isArray(pages) ? [...pages] : [];
+                  // Perform sanity check on orderedPages before passing to handleOpenReviewView
+                  let checkedPages = Array.isArray(orderedPages) ? [...orderedPages] : [];
 
                   // Synchronize current page's editedText if user typed without hitting save
                   if (currentPage && editedText && editedText.trim().length > 0) {
-                    const currIdx = pages.findIndex((p) => p.id === currentPage.id);
+                    const currIdx = orderedPages.findIndex((p) => p.id === currentPage.id);
                     if (currIdx !== -1) {
                       checkedPages[currIdx] = { ...checkedPages[currIdx], raw_ocr_text: editedText };
                     }
@@ -349,7 +379,7 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
           <div className="p-4 bg-slate-950/95 border-b border-indigo-500/30 animate-in fade-in shrink-0">
             <AIProgressStepper
               title="Gemini AI Curriculum Structuring Pipeline"
-              subtitle={`Converting ${pages.length || 1} note pages into a 12-week structured textbook with glossary`}
+              subtitle={`Converting ${orderedPages.length || 1} note pages into a 12-week structured textbook with glossary`}
               steps={structuringSteps}
               currentStepIndex={currentStructuringStep}
               progressPercentage={structuringProgress}
@@ -367,7 +397,7 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
         )}
 
         {/* Content Body */}
-        {pages.length === 0 ? (
+        {orderedPages.length === 0 ? (
           /* Empty State if 0 pages */
           <div className="flex-1 p-8 flex flex-col items-center justify-center text-center bg-[#0b0f19] space-y-4">
             <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 flex items-center justify-center shadow-inner">
@@ -395,12 +425,12 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
                 }`}
               >
                 {isUploadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                <span>{isUploadingMore ? 'Processing...' : 'Upload Scanned Images'}</span>
+                <span>{isUploadingMore ? 'Processing PDF / Images...' : 'Upload Scanned Images or PDF'}</span>
                 <input
                   type="file"
                   id="upload-empty-pages"
                   multiple
-                  accept="image/*"
+                  accept="image/*,.pdf,application/pdf"
                   onChange={handleAddMoreFiles}
                   disabled={isUploadingMore}
                   className="hidden"
@@ -449,74 +479,151 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
           /* Normal Split View: Sidebar, Scanned Image, OCR Text */
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
             {/* Sidebar: Thumbnail List */}
-            <div className="w-full md:w-60 bg-slate-900/80 border-b md:border-b-0 md:border-r border-white/10 p-3 flex md:flex-col gap-2 shrink-0 overflow-x-auto md:overflow-y-auto">
-              <div className="flex items-center justify-between mb-1 w-full shrink-0">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Pages ({pages.length})
-                </span>
-                <label
-                  htmlFor="upload-more-pages"
-                  className="cursor-pointer text-indigo-400 hover:text-indigo-300 text-xs font-semibold flex items-center gap-1 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/30"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Add Page</span>
-                  <input
-                    type="file"
-                    id="upload-more-pages"
-                    multiple
-                    accept="image/*"
-                    onChange={handleAddMoreFiles}
-                    className="hidden"
-                  />
-                </label>
+            <div className="w-full md:w-64 bg-slate-900/80 border-b md:border-b-0 md:border-r border-white/10 p-3 flex md:flex-col gap-2 shrink-0 overflow-x-auto md:overflow-y-auto">
+              <div className="flex flex-col gap-1 mb-1 w-full shrink-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Pages ({orderedPages.length})
+                  </span>
+                  <label
+                    htmlFor="upload-more-pages"
+                    className="cursor-pointer text-indigo-400 hover:text-indigo-300 text-xs font-semibold flex items-center gap-1 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/30"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Add Page / PDF</span>
+                    <input
+                      type="file"
+                      id="upload-more-pages"
+                      multiple
+                      accept="image/*,.pdf,application/pdf"
+                      onChange={handleAddMoreFiles}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                {orderedPages.length > 1 && (
+                  <p className="text-[10px] text-slate-400 hidden md:block">
+                    Drag handles or use arrows to reorder
+                  </p>
+                )}
               </div>
 
               <div className="flex md:flex-col gap-2 w-full">
-                {pages.map((p, idx) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handlePageSelect(idx)}
-                    className={`p-2.5 rounded-2xl border text-left cursor-pointer transition-all flex items-center gap-3 shrink-0 min-w-[150px] md:min-w-0 ${
-                      selectedPageIndex === idx
-                        ? 'border-indigo-500 bg-indigo-600/20 text-white shadow-lg ring-1 ring-indigo-500/30'
-                        : 'border-white/10 bg-slate-900/50 hover:bg-slate-800 text-slate-300'
-                    }`}
-                  >
-                    <div className="w-10 h-12 bg-slate-950 rounded-xl overflow-hidden shrink-0 border border-white/10 flex items-center justify-center">
-                      {p.image_url && p.image_url.startsWith('data:image') ? (
-                        <img
-                          src={p.image_url}
-                          alt={`Page ${p.page_order}`}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <FileText className="w-5 h-5 text-slate-500" />
-                      )}
+                {orderedPages.map((p, idx) => {
+                  const isSelected = selectedPageIndex === idx;
+                  const isBeingDragged = draggedIndex === idx;
+                  const isDragTarget = dragOverIndex === idx && draggedIndex !== idx;
+
+                  return (
+                    <div
+                      key={p.id || `page-${idx}`}
+                      draggable
+                      onDragStart={(e) => {
+                        setDraggedIndex(idx);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (dragOverIndex !== idx) setDragOverIndex(idx);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverIndex === idx) setDragOverIndex(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedIndex !== null && draggedIndex !== idx) {
+                          movePage(draggedIndex, idx);
+                        }
+                        setDraggedIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      onClick={() => handlePageSelect(idx)}
+                      className={`group relative p-2 rounded-2xl border text-left cursor-grab active:cursor-grabbing transition-all flex items-center gap-2 shrink-0 min-w-[170px] md:min-w-0 select-none ${
+                        isBeingDragged
+                          ? 'opacity-40 border-dashed border-indigo-400 bg-indigo-950/30'
+                          : isDragTarget
+                          ? 'border-indigo-400 bg-indigo-500/20 shadow-lg scale-[1.02] ring-2 ring-indigo-400'
+                          : isSelected
+                          ? 'border-indigo-500 bg-indigo-600/20 text-white shadow-lg ring-1 ring-indigo-500/30'
+                          : 'border-white/10 bg-slate-900/50 hover:bg-slate-800 text-slate-300'
+                      }`}
+                    >
+                      {/* Drag Handle Icon */}
+                      <div className="text-slate-500 group-hover:text-slate-300 transition-colors p-0.5">
+                        <GripVertical className="w-4 h-4 shrink-0" />
+                      </div>
+
+                      {/* Thumbnail Preview */}
+                      <div className="w-10 h-12 bg-slate-950 rounded-xl overflow-hidden shrink-0 border border-white/10 flex items-center justify-center">
+                        {p.image_url && p.image_url.startsWith('data:image') ? (
+                          <img
+                            src={p.image_url}
+                            alt={`Page ${p.page_order}`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <FileText className="w-5 h-5 text-slate-500" />
+                        )}
+                      </div>
+
+                      {/* Page Label & Confidence */}
+                      <div className="overflow-hidden min-w-0 flex-1">
+                        <span className="block font-bold text-white text-xs truncate">
+                          Page #{p.page_order || idx + 1}
+                        </span>
+                        {(p.ocr_confidence || 0) >= 0.99 ? (
+                          <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 mt-0.5">
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            100% Verified
+                          </span>
+                        ) : p.raw_ocr_text?.toLowerCase().includes('scanned page') || (p.ocr_confidence || 0) < 0.3 ? (
+                          <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5 mt-0.5">
+                            <AlertCircle className="w-3 h-3 text-amber-400" />
+                            Needs OCR
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-0.5 mt-0.5">
+                            <Check className="w-3 h-3 text-indigo-400" />
+                            {Math.round((p.ocr_confidence || 0.95) * 100)}% Match
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Up/Down Quick Controls */}
+                      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            movePage(idx, idx - 1);
+                          }}
+                          disabled={idx === 0}
+                          className="p-1 hover:bg-white/20 rounded text-slate-300 hover:text-white disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
+                          title="Move Page Up"
+                        >
+                          <ChevronUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            movePage(idx, idx + 1);
+                          }}
+                          disabled={idx === orderedPages.length - 1}
+                          className="p-1 hover:bg-white/20 rounded text-slate-300 hover:text-white disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
+                          title="Move Page Down"
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="overflow-hidden min-w-0">
-                      <span className="block font-bold text-white text-xs truncate">
-                        Page #{p.page_order}
-                      </span>
-                      {(p.ocr_confidence || 0) >= 0.99 ? (
-                        <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 mt-0.5">
-                          <Check className="w-3 h-3 text-emerald-400" />
-                          100% Verified
-                        </span>
-                      ) : p.raw_ocr_text?.toLowerCase().includes('scanned page') || (p.ocr_confidence || 0) < 0.3 ? (
-                        <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5 mt-0.5">
-                          <AlertCircle className="w-3 h-3 text-amber-400" />
-                          Needs OCR
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-0.5 mt-0.5">
-                          <Check className="w-3 h-3 text-indigo-400" />
-                          {Math.round((p.ocr_confidence || 0.95) * 100)}% Match
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

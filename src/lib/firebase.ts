@@ -9,18 +9,10 @@ export const auth = getAuth(app);
 
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await getDocFromServer(doc(db, 'test', 'connection')).catch(() => null);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (
-      message.includes('client is offline') ||
-      message.includes('unavailable') ||
-      (error && typeof error === 'object' && 'code' in error && (error as any).code === 'unavailable')
-    ) {
-      console.info('Firestore notice: Connection deferred or client operating in offline mode.');
-    } else {
-      console.debug('Firestore connection check completed:', message);
-    }
+    console.info('Firestore initial connection check handled.');
   }
 }
-testConnection();
+testConnection().catch(() => {});
+

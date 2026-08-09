@@ -105,20 +105,32 @@ export async function fetchUserBooks(userId: string): Promise<Book[]> {
 // Listen to Books in real-time
 export function subscribeToBooks(
   userId: string,
-  onNext: (books: Book[]) => void
+  onNext: (books: Book[]) => void,
+  onError?: (error: unknown) => void
 ): Unsubscribe {
   const path = 'books';
-  const q = query(collection(db, 'books'), where('userId', '==', userId));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const books = snapshot.docs.map((d) => d.data() as Book);
-      onNext(books);
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+  try {
+    const q = query(collection(db, 'books'), where('userId', '==', userId));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const books = snapshot.docs.map((d) => d.data() as Book);
+        onNext(books);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, path);
+        if (onError) {
+          onError(error);
+        }
+      }
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, path);
+    if (onError) {
+      onError(err);
     }
-  );
+    return () => {};
+  }
 }
 
 // Delete Book

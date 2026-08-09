@@ -21,9 +21,23 @@ export function parseMarkdownTable(text: string): {
   rows: string[][];
 } | null {
   if (!text || typeof text !== 'string') return null;
-  const lines = text.trim().split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-  const tableLines = lines.filter((l) => l.startsWith('|') && (l.endsWith('|') || l.includes('|', 1)));
-  if (tableLines.length < 2) return null;
+
+  // 1. Pre-process escaped newlines, carriage returns, and row boundary markers
+  let cleanText = text
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+
+  // Replace double-pipe row boundaries like "GROUP VIII || ---" or "He (2) || 2"
+  cleanText = cleanText.replace(/([^|\s])\s*\|\s*\|\s*([^|\s])/g, '$1 |\n| $2');
+
+  // Break lines before separator rows like "| --- |" if concatenated to header
+  cleanText = cleanText.replace(/([^|\n])\s*(\|\s*:?---+[\s\-:|]*\|)/g, '$1\n$2');
+
+  // Break lines after separator rows if concatenated to first data row
+  cleanText = cleanText.replace(/(\|\s*:?---+[\s\-:|]*\|)\s*([^|\n])/g, '$1\n$2');
+
+  const lines = cleanText.trim().split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
 
   const parseRow = (line: string) => {
     let cleaned = line.trim();
@@ -32,24 +46,73 @@ export function parseMarkdownTable(text: string): {
     return cleaned.split('|').map((cell) => cell.trim());
   };
 
-  const headers = parseRow(tableLines[0]);
-  if (!headers || headers.length === 0) return null;
+  const tableLines = lines.filter((l) => l.startsWith('|') && (l.endsWith('|') || l.includes('|', 1)));
 
-  const rows: string[][] = [];
-
-  for (let i = 1; i < tableLines.length; i++) {
-    const rowStr = tableLines[i];
-    // skip separator row like | --- | --- |
-    if (rowStr.replace(/[\s|\-:]/g, '').length === 0) continue;
-    const cells = parseRow(rowStr);
-    if (cells.length > 0) {
-      while (cells.length < headers.length) cells.push('');
-      rows.push(cells.slice(0, headers.length));
+  if (tableLines.length >= 2) {
+    const headers = parseRow(tableLines[0]);
+    if (headers && headers.length > 0) {
+      const rows: string[][] = [];
+      for (let i = 1; i < tableLines.length; i++) {
+        const rowStr = tableLines[i];
+        // Skip separator row like | --- | --- |
+        if (rowStr.replace(/[\s|\-:]/g, '').length === 0) continue;
+        const cells = parseRow(rowStr);
+        if (cells.length > 0) {
+          while (cells.length < headers.length) cells.push('');
+          rows.push(cells.slice(0, headers.length));
+        }
+      }
+      if (rows.length > 0) {
+        return { headers, rows };
+      }
     }
   }
 
-  if (rows.length === 0) return null;
-  return { headers, rows };
+  // 2. Fallback: single-line pipe parsing if multi-line splitting didn't yield a valid table
+  const allCells = text
+    .replace(/\\n/g, ' ')
+    .split('|')
+    .map((c) => c.trim());
+
+  // Remove empty leading/trailing cells caused by outer '|'
+  if (allCells.length > 0 && allCells[0] === '') allCells.shift();
+  if (allCells.length > 0 && allCells[allCells.length - 1] === '') allCells.pop();
+
+  if (allCells.length === 0) return null;
+
+  // Find separator cells block
+  let sepStartIndex = -1;
+  let sepEndIndex = -1;
+
+  for (let i = 0; i < allCells.length; i++) {
+    const isSep = /^:?---+:?$/.test(allCells[i]);
+    if (isSep) {
+      if (sepStartIndex === -1) sepStartIndex = i;
+      sepEndIndex = i;
+    } else if (sepStartIndex !== -1) {
+      break;
+    }
+  }
+
+  if (sepStartIndex > 0) {
+    const headers = allCells.slice(0, sepStartIndex);
+    const colCount = headers.length;
+    const dataCells = allCells.slice(sepEndIndex + 1);
+
+    if (colCount > 0 && dataCells.length > 0) {
+      const rows: string[][] = [];
+      for (let i = 0; i < dataCells.length; i += colCount) {
+        const chunk = dataCells.slice(i, i + colCount);
+        while (chunk.length < colCount) chunk.push('');
+        rows.push(chunk);
+      }
+      if (rows.length > 0) {
+        return { headers, rows };
+      }
+    }
+  }
+
+  return null;
 }
 
 export function normalizeContentSections(sections: any): any[] {
@@ -79,13 +142,22 @@ export function normalizeContentSections(sections: any): any[] {
       }
     }
 
-    // 2. Group consecutive paragraph items that are table rows into single multi-line table strings
+    // 2. Normalize paragraphs: if a paragraph is a table (even single-line), convert it to clean multi-line markdown table
     const newParagraphs: string[] = [];
     let tableBuffer: string[] = [];
 
     const flushTable = () => {
       if (tableBuffer.length > 0) {
-        newParagraphs.push(tableBuffer.join('\n'));
+        const rawTableText = tableBuffer.join('\n');
+        const parsed = parseMarkdownTable(rawTableText);
+        if (parsed) {
+          const headerStr = `| ${parsed.headers.join(' | ')} |`;
+          const sepStr = `| ${parsed.headers.map(() => '---').join(' | ')} |`;
+          const rowStrs = parsed.rows.map((r) => `| ${r.join(' | ')} |`);
+          newParagraphs.push([headerStr, sepStr, ...rowStrs].join('\n'));
+        } else {
+          newParagraphs.push(rawTableText);
+        }
         tableBuffer = [];
       }
     };
@@ -93,10 +165,30 @@ export function normalizeContentSections(sections: any): any[] {
     for (const p of paragraphs) {
       if (typeof p !== 'string') continue;
       const trimmed = p.trim();
+
+      // Check if p itself is already a full single-line or multi-line table
+      const directTable = parseMarkdownTable(p);
+      if (directTable) {
+        flushTable();
+        const headerStr = `| ${directTable.headers.join(' | ')} |`;
+        const sepStr = `| ${directTable.headers.map(() => '---').join(' | ')} |`;
+        const rowStrs = directTable.rows.map((r) => `| ${r.join(' | ')} |`);
+        newParagraphs.push([headerStr, sepStr, ...rowStrs].join('\n'));
+        continue;
+      }
+
       if (trimmed.startsWith('|') && (trimmed.endsWith('|') || trimmed.includes('|', 1))) {
         if (p.includes('\n')) {
           flushTable();
-          newParagraphs.push(p);
+          const parsed = parseMarkdownTable(p);
+          if (parsed) {
+            const headerStr = `| ${parsed.headers.join(' | ')} |`;
+            const sepStr = `| ${parsed.headers.map(() => '---').join(' | ')} |`;
+            const rowStrs = parsed.rows.map((r) => `| ${r.join(' | ')} |`);
+            newParagraphs.push([headerStr, sepStr, ...rowStrs].join('\n'));
+          } else {
+            newParagraphs.push(p);
+          }
         } else {
           tableBuffer.push(trimmed);
         }

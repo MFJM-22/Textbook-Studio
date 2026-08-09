@@ -219,10 +219,17 @@ export default function App() {
     if (currentUser) {
       setIsLoading(true);
       setShowLandingPage(false);
-      const unsubscribe = subscribeToBooks(currentUser.uid, (userBooks) => {
-        setBooks(userBooks);
-        setIsLoading(false);
-      });
+      const unsubscribe = subscribeToBooks(
+        currentUser.uid,
+        (userBooks) => {
+          setBooks(userBooks);
+          setIsLoading(false);
+        },
+        (err) => {
+          console.warn('Firestore subscription offline or unavailable, continuing with cached/local state:', err);
+          setIsLoading(false);
+        }
+      );
       return () => unsubscribe();
     } else {
       // If not logged in (signed out), return to landing page

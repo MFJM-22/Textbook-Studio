@@ -10,8 +10,8 @@ const app = express();
 const PORT = 3000;
 
 // Increase payload limit for base64 scanned document images
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // Lazy Gemini SDK Initialization
 let genAIInstance: GoogleGenAI | null = null;
@@ -260,25 +260,20 @@ app.post('/api/books/:id/upload-pages', async (req, res) => {
   book.status = 'ocr_processing';
 
   const existingPages = pagesStore.filter((p) => p.book_id === bookId);
-  let startOrder = existingPages.length + 1;
+  const startOrder = existingPages.length + 1;
 
-  const createdPages: Page[] = [];
-
-  for (const pItem of pages) {
-    const pageId = `p-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const pagePromises = pages.map(async (pItem, idx) => {
+    const pageId = `p-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
     const pageObj: Page = {
       id: pageId,
       book_id: bookId,
-      page_order: startOrder++,
+      page_order: startOrder + idx,
       image_url: pItem.image_url || pItem.image_data || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
       raw_ocr_text: pItem.raw_text || '',
       ocr_confidence: 0.10,
       status: 'processing',
       created_at: new Date().toISOString(),
     };
-
-    pagesStore.push(pageObj);
-    createdPages.push(pageObj);
 
     // Run Gemini OCR if image data is present and text isn't provided
     const imgSrc = pItem.image_data || pItem.image_url || '';
@@ -315,7 +310,12 @@ Transcribe all text from the page with extreme accuracy:
       pageObj.ocr_confidence = 1.0; // User provided raw_text explicitly
       pageObj.status = 'completed';
     }
-  }
+
+    return pageObj;
+  });
+
+  const createdPages = await Promise.all(pagePromises);
+  pagesStore.push(...createdPages);
 
   res.json({ success: true, pages: createdPages });
 });

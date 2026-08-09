@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Upload, Sparkles, BookOpen, Check, FileText, Loader2, AlertCircle } from 'lucide-react';
 import { SampleNote } from '../types';
 import { AIProgressStepper, ProgressStep } from './AIProgressStepper';
+import { processUploadedFiles } from '../lib/pdfUploader';
 
 const creationSteps: ProgressStep[] = [
   { id: 'prep', label: '1. Optimization', description: 'Compressing and preparing scanned page assets' },
@@ -41,6 +42,7 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
   const [term, setTerm] = useState('2nd Term');
   const [customTextNotes, setCustomTextNotes] = useState('');
   const [uploadedImages, setUploadedImages] = useState<{ image_data: string }[]>([]);
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
 
   // AI Generation Stepper Progress State
   const [creationProgress, setCreationProgress] = useState(0);
@@ -134,15 +136,20 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    for (const file of Array.from(files) as File[]) {
-      try {
-        const compressedData = await compressImage(file);
-        if (compressedData) {
-          setUploadedImages((prev) => [...prev, { image_data: compressedData }]);
-        }
-      } catch (err) {
-        console.error('Error compressing uploaded image:', err);
+    setIsProcessingFiles(true);
+    setError(null);
+    try {
+      const pageList = await processUploadedFiles(Array.from(files) as File[]);
+      const newImages = pageList.filter((p) => p.image_data).map((p) => ({ image_data: p.image_data! }));
+      if (newImages.length > 0) {
+        setUploadedImages((prev) => [...prev, ...newImages]);
       }
+    } catch (err: any) {
+      console.error('Error processing uploaded files:', err);
+      setError(err.message || 'Error converting uploaded file.');
+    } finally {
+      setIsProcessingFiles(false);
+      e.target.value = '';
     }
   };
 
@@ -324,24 +331,34 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">Upload Scanned Pages (Images)</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">Upload Scanned Pages or PDF Documents</label>
                 <div className="border-2 border-dashed border-white/15 rounded-2xl p-5 text-center hover:bg-white/5 transition-colors bg-white/[0.02]">
                   <Upload className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
-                  <p className="text-xs text-slate-200 font-medium">Click to upload scanned handwritten note images</p>
-                  <p className="text-[11px] text-slate-400 mb-3">Supports JPG, PNG, WEBP</p>
+                  <p className="text-xs text-slate-200 font-medium">Click to upload scanned handwritten notes or PDF documents</p>
+                  <p className="text-[11px] text-slate-400 mb-3">Supports JPG, PNG, WEBP, and Scanned PDF files</p>
                   <input
                     type="file"
                     multiple
-                    accept="image/*"
+                    accept="image/*,.pdf,application/pdf"
                     onChange={handleFileUpload}
+                    disabled={isProcessingFiles}
                     className="hidden"
                     id="page-images-input"
                   />
                   <label
                     htmlFor="page-images-input"
-                    className="inline-block px-5 py-2 btn-emerald text-xs font-bold cursor-pointer shadow-md"
+                    className={`inline-flex items-center gap-2 px-5 py-2 btn-emerald text-xs font-bold cursor-pointer shadow-md ${
+                      isProcessingFiles ? 'opacity-50 pointer-events-none' : ''
+                    }`}
                   >
-                    Select Page Files
+                    {isProcessingFiles ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Converting PDF Pages...</span>
+                      </>
+                    ) : (
+                      <span>Select Images or PDF File</span>
+                    )}
                   </label>
 
                   {uploadedImages.length > 0 && (
