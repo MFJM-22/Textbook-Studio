@@ -69,19 +69,19 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
   const safeWeeks = weeks || [];
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans print:bg-white print:text-black">
+    <div className="min-h-screen bg-[#07090e] text-slate-100 font-sans print:bg-white print:text-black">
       {/* Non-printable Top Bar */}
-      <div className="bg-white border-b border-slate-200/80 px-6 py-4 flex items-center justify-between sticky top-0 z-40 print:hidden text-slate-900 shadow-xs">
+      <div className="bg-[#0b0f19] border-b border-white/10 px-6 py-4 flex items-center justify-between sticky top-0 z-40 print:hidden text-slate-100 shadow-2xl backdrop-blur-md">
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
-            className="p-2 text-slate-500 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors border border-slate-200/60"
+            className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors border border-white/10"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-base font-bold text-slate-900">Textbook Print & PDF Studio</h2>
-            <p className="text-xs text-slate-500">{book.title}</p>
+            <h2 className="text-base font-bold text-white font-display">Textbook Print & PDF Studio</h2>
+            <p className="text-xs text-slate-400">{book.title}</p>
           </div>
         </div>
 
