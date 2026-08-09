@@ -1,14 +1,10 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { generateBookDocx, normalizeContentSections } from './src/lib/docGenerator';
-import { generateBookPdf } from './src/lib/pdfGenerator';
 import { Author, Book, Page, Week, GlossaryTerm, SampleNote } from './src/types';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = process.cwd();
 
 const app = express();
 const PORT = 3000;
@@ -832,6 +828,7 @@ app.post('/api/books/:id/generate-pdf', async (req, res) => {
   }
 
   try {
+    const { generateBookPdf } = await import('./src/lib/pdfGenerator');
     const pdfBuffer = await generateBookPdf(book, author, weeks, glossary);
 
     book.status = 'generated';
@@ -858,6 +855,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Setup Vite or Static File Serving
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
