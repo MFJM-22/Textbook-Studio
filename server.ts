@@ -74,6 +74,46 @@ function getOrCreateBook(id: string, meta?: Partial<Book>): Book {
   return book;
 }
 
+// Helper to run Gemini Vision OCR on base64 data or HTTP image URL
+async function extractTextFromImageWithGemini(imgSrc: string, promptText: string): Promise<string> {
+  if (!imgSrc) return '';
+  const ai = getGenAI();
+  let mimeType = 'image/jpeg';
+  let base64Data = '';
+
+  if (imgSrc.startsWith('data:image')) {
+    const base64Parts = imgSrc.split(',');
+    mimeType = base64Parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+    base64Data = base64Parts[1];
+  } else if (imgSrc.startsWith('http://') || imgSrc.startsWith('https://')) {
+    try {
+      const response = await fetch(imgSrc);
+      if (response.ok) {
+        const arrayBuffer = await response.arrayBuffer();
+        base64Data = Buffer.from(arrayBuffer).toString('base64');
+        const contentType = response.headers.get('content-type');
+        if (contentType) mimeType = contentType.split(';')[0];
+      }
+    } catch (err) {
+      console.warn('Failed to fetch image URL for Gemini OCR:', err);
+    }
+  }
+
+  if (!base64Data) return '';
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.6-flash',
+    contents: {
+      parts: [
+        { inlineData: { mimeType, data: base64Data } },
+        { text: promptText },
+      ],
+    },
+  });
+
+  return (response.text || '').trim();
+}
+
 // Helper for clean fallback text if OCR extraction returns empty
 function getCleanFallbackText(subject: string, pageNum: number): string {
   return `Scanned page ${pageNum} for ${subject || 'lesson notes'}. Edit text or re-run OCR if needed.`;
@@ -228,7 +268,7 @@ app.post('/api/books/:id/upload-pages', async (req, res) => {
       page_order: startOrder++,
       image_url: pItem.image_url || pItem.image_data || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
       raw_ocr_text: pItem.raw_text || '',
-      ocr_confidence: 0.95,
+      ocr_confidence: 0.10,
       status: 'processing',
       created_at: new Date().toISOString(),
     };
@@ -236,49 +276,39 @@ app.post('/api/books/:id/upload-pages', async (req, res) => {
     pagesStore.push(pageObj);
     createdPages.push(pageObj);
 
-  // Run Gemini OCR if image data is present and text isn't provided
+    // Run Gemini OCR if image data is present and text isn't provided
     const imgSrc = pItem.image_data || pItem.image_url || '';
     if (!pItem.raw_text && imgSrc) {
       try {
-        const ai = getGenAI();
-        const promptText = "Transcribe all handwritten and typed text from this lesson note page image accurately and completely. Include all headings, bullet points, formulas, diagrams/labels, and tables (formatted as Markdown tables). Extract ONLY what is visible in the image. Do NOT summarize, modify, fabricate, or add any unwritten content.";
+        const promptText = `Examine this scanned image of handwritten/typed teacher lesson notes carefully.
+Transcribe all text from the page with extreme accuracy:
+- Include all headings, titles, subheadings, dates, topics, and week numbers
+- Transcribe all paragraphs, lists, equations, chemical symbols, and handwritten definitions
+- Format ALL tables as Markdown tables (| Header 1 | Header 2 |\n| --- | --- |\n| Row 1 | Row 2 |)
+- Extract ONLY what is visible in the image. Do NOT summarize or invent text.`;
 
-        let contentInput: any;
+        const extractedText = await extractTextFromImageWithGemini(imgSrc, promptText);
 
-        if (imgSrc.startsWith('data:image')) {
-          const base64Parts = imgSrc.split(',');
-          const mimeType = base64Parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
-          const base64Data = base64Parts[1];
-
-          contentInput = {
-            parts: [
-              { inlineData: { mimeType, data: base64Data } },
-              { text: promptText },
-            ],
-          };
+        if (extractedText && extractedText.length > 5) {
+          pageObj.raw_ocr_text = extractedText;
+          pageObj.ocr_confidence = 0.96;
         } else {
-          contentInput = promptText;
+          pageObj.raw_ocr_text = pItem.raw_text || getCleanFallbackText(book.subject, pageObj.page_order);
+          pageObj.ocr_confidence = 0.10; // Low confidence for fallback text
         }
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.6-flash',
-          contents: contentInput,
-        });
-
-        const extractedText = (response.text || '').trim();
-        pageObj.raw_ocr_text = extractedText || pItem.raw_text || getCleanFallbackText(book.subject, pageObj.page_order);
-        pageObj.ocr_confidence = extractedText ? 0.96 : 0.60;
         pageObj.status = 'completed';
       } catch (err: any) {
         console.error('OCR Error on page:', err);
         pageObj.raw_ocr_text = pItem.raw_text || getCleanFallbackText(book.subject, pageObj.page_order);
-        pageObj.ocr_confidence = 0.60;
+        pageObj.ocr_confidence = 0.10;
         pageObj.status = 'completed';
       }
     } else if (!pageObj.raw_ocr_text) {
       pageObj.raw_ocr_text = getCleanFallbackText(book.subject, pageObj.page_order);
+      pageObj.ocr_confidence = 0.10;
       pageObj.status = 'completed';
     } else {
+      pageObj.ocr_confidence = 1.0; // User provided raw_text explicitly
       pageObj.status = 'completed';
     }
   }
@@ -294,33 +324,25 @@ app.post('/api/books/:id/re-ocr-page', async (req, res) => {
 
   if (updated_text !== undefined) {
     page.raw_ocr_text = updated_text;
-    page.ocr_confidence = 1.0; // human verified
+    page.ocr_confidence = 1.0; // human verified 100% match
     return res.json(page);
   }
 
   // Otherwise trigger AI OCR re-analysis
   try {
-    const ai = getGenAI();
-    let promptText = "Perform meticulous transcription of this note page. Extract all handwritten/typed prose, lists, equations, and tables as markdown tables.";
-    
-    let contentInput: any = promptText;
-    if (page.image_url && page.image_url.startsWith('data:image')) {
-      const base64Parts = page.image_url.split(',');
-      const mimeType = base64Parts[0].match(/:(.*?);/)?.[1] || 'image/png';
-      const base64Data = base64Parts[1];
-      contentInput = [
-        { inlineData: { mimeType, data: base64Data } },
-        { text: promptText },
-      ];
+    const book = getOrCreateBook(req.params.id);
+    const promptText = `Perform meticulous transcription of this handwritten/typed note page image.
+Extract all headings, prose, lists, equations, chemical symbols, and tables as markdown tables (| Col 1 | Col 2 |).`;
+
+    const extractedText = await extractTextFromImageWithGemini(page.image_url, promptText);
+
+    if (extractedText && extractedText.length > 5) {
+      page.raw_ocr_text = extractedText;
+      page.ocr_confidence = 0.98;
+    } else {
+      page.raw_ocr_text = page.raw_ocr_text || getCleanFallbackText(book.subject, page.page_order);
+      page.ocr_confidence = 0.10;
     }
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: contentInput,
-    });
-
-    page.raw_ocr_text = response.text || page.raw_ocr_text;
-    page.ocr_confidence = 0.98;
     res.json(page);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Re-OCR failed' });

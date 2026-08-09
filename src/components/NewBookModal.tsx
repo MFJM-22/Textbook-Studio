@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { X, Upload, Sparkles, BookOpen, Check, FileText, Loader2, AlertCircle } from 'lucide-react';
 import { SampleNote } from '../types';
+import { AIProgressStepper, ProgressStep } from './AIProgressStepper';
+
+const creationSteps: ProgressStep[] = [
+  { id: 'prep', label: '1. Optimization', description: 'Compressing and preparing scanned page assets' },
+  { id: 'ocr', label: '2. Gemini Vision', description: 'Transcribing handwritten notes into clean text' },
+  { id: 'db', label: '3. Project Setup', description: 'Initializing Firestore database entries' },
+  { id: 'launch', label: '4. Opening Studio', description: 'Launching OCR verification workspace' },
+];
 
 interface NewBookModalProps {
   isOpen: boolean;
@@ -33,6 +41,42 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
   const [term, setTerm] = useState('2nd Term');
   const [customTextNotes, setCustomTextNotes] = useState('');
   const [uploadedImages, setUploadedImages] = useState<{ image_data: string }[]>([]);
+
+  // AI Generation Stepper Progress State
+  const [creationProgress, setCreationProgress] = useState(0);
+  const [currentCreationStep, setCurrentCreationStep] = useState(0);
+
+  useEffect(() => {
+    let timer: any;
+    if (isSubmitting) {
+      setCreationProgress(10);
+      setCurrentCreationStep(0);
+      timer = setInterval(() => {
+        setCreationProgress((prev) => {
+          if (prev < 30) {
+            setCurrentCreationStep(0);
+            return prev + 5;
+          } else if (prev < 65) {
+            setCurrentCreationStep(1);
+            return prev + 4;
+          } else if (prev < 90) {
+            setCurrentCreationStep(2);
+            return prev + 3;
+          } else if (prev < 98) {
+            setCurrentCreationStep(3);
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 350);
+    } else {
+      setCreationProgress(0);
+      setCurrentCreationStep(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isSubmitting]);
 
   useEffect(() => {
     if (isOpen) {
@@ -326,6 +370,26 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
                 />
               </div>
             </div>
+          )}
+
+          {isSubmitting && (
+            <AIProgressStepper
+              title="Creating Textbook & Processing OCR"
+              subtitle="Gemini Vision is parsing handwritten notes & initializing database"
+              steps={creationSteps}
+              currentStepIndex={currentCreationStep}
+              progressPercentage={creationProgress}
+              statusMessage={
+                currentCreationStep === 0
+                  ? 'Optimizing scanned image assets and verifying note data...'
+                  : currentCreationStep === 1
+                  ? 'Gemini Multimodal Vision OCR is transcribing notes into clean text...'
+                  : currentCreationStep === 2
+                  ? 'Structuring textbook database entry and creating lesson pages...'
+                  : 'Preparing OCR Verification Studio workspace...'
+              }
+              className="my-2"
+            />
           )}
 
           {error && (

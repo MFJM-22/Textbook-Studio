@@ -11,7 +11,7 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { Book, Week, Page } from '../types';
+import { Author, Book, Week, Page } from '../types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -185,5 +185,35 @@ export async function fetchGlossaryFromFirestore(bookId: string): Promise<Glossa
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
     return [];
+  }
+}
+
+// Save Author Profile for User
+export async function saveAuthorToFirestore(author: Author, userId: string): Promise<void> {
+  const path = `authors/${userId}`;
+  try {
+    const authorData = {
+      ...author,
+      userId,
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'authors', userId), authorData, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+// Fetch Author Profile for User
+export async function fetchAuthorFromFirestore(userId: string): Promise<Author | null> {
+  const path = `authors/${userId}`;
+  try {
+    const snapshot = await getDoc(doc(db, 'authors', userId));
+    if (snapshot.exists()) {
+      return snapshot.data() as Author;
+    }
+    return null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return null;
   }
 }

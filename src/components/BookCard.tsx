@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   FileText,
   Clock,
@@ -10,6 +10,8 @@ import {
   Trash2,
   Edit,
   BookMarked,
+  Loader2,
+  Download,
 } from 'lucide-react';
 import { Book, BookStatus } from '../types';
 
@@ -18,6 +20,7 @@ interface BookCardProps {
   onReview: (book: Book) => void;
   onViewPages: (book: Book) => void;
   onExportDocx: (book: Book) => void;
+  onDownloadPdf: (book: Book) => void;
   onPrintPreview: (book: Book) => void;
   onDelete: (bookId: string) => void;
 }
@@ -68,10 +71,23 @@ export const BookCard: React.FC<BookCardProps> = ({
   onReview,
   onViewPages,
   onExportDocx,
+  onDownloadPdf,
   onPrintPreview,
   onDelete,
 }) => {
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const badge = statusBadges[book.status] || statusBadges.uploading;
+
+  const handleDownloadPdfClick = async () => {
+    setIsDownloadingPdf(true);
+    try {
+      await onDownloadPdf(book);
+    } catch (err) {
+      console.error('PDF download error:', err);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   return (
     <div className="glass-panel glass-panel-hover rounded-2xl border border-white/10 transition-all flex flex-col justify-between overflow-hidden group">
@@ -164,6 +180,21 @@ export const BookCard: React.FC<BookCardProps> = ({
                 className="p-2 text-slate-300 hover:text-white btn-glass text-xs font-medium"
               >
                 <Printer className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={handleDownloadPdfClick}
+                id={`download-pdf-${book.id}`}
+                disabled={isDownloadingPdf}
+                title="Download PDF Document"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-rose-600/90 hover:bg-rose-500 text-white rounded-xl transition-all shadow-xs border border-rose-500/30 whitespace-nowrap disabled:opacity-50 cursor-pointer disabled:cursor-wait"
+              >
+                {isDownloadingPdf ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5" />
+                )}
+                <span>PDF</span>
               </button>
 
               <button

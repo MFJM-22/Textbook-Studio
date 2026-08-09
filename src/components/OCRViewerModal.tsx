@@ -16,6 +16,20 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Book, Page } from '../types';
+import { AIProgressStepper, ProgressStep } from './AIProgressStepper';
+
+const structuringSteps: ProgressStep[] = [
+  { id: 'audit', label: '1. OCR Audit', description: 'Validating transcribed notes & markdown tables' },
+  { id: 'curriculum', label: '2. Gemini Structuring', description: 'Generating week-by-week units & lesson subheadings' },
+  { id: 'glossary', label: '3. Auto Glossary', description: 'Extracting key terminology & Word table formats' },
+  { id: 'review', label: '4. Review Gate', description: 'Preparing interactive curriculum editor' },
+];
+
+const ocrProcessingSteps: ProgressStep[] = [
+  { id: 'upload', label: '1. Page Input', description: 'Reading scanned image / raw typed note' },
+  { id: 'vision', label: '2. Gemini Vision', description: 'Extracting handwritten prose & tables' },
+  { id: 'sync', label: '3. Updating Page', description: 'Syncing transcription to text editor' },
+];
 
 interface OCRViewerModalProps {
   book: Book;
@@ -48,6 +62,76 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
   const [showAddTextInput, setShowAddTextInput] = useState<boolean>(false);
   const [newCustomNotes, setNewCustomNotes] = useState<string>('');
   const [zoomLevel, setZoomLevel] = useState<number>(100);
+
+  // Stepper Progress State
+  const [structuringProgress, setStructuringProgress] = useState(0);
+  const [currentStructuringStep, setCurrentStructuringStep] = useState(0);
+
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [currentOcrStep, setCurrentOcrStep] = useState(0);
+
+  // Structuring Timer
+  useEffect(() => {
+    let timer: any;
+    if (isStructuring) {
+      setStructuringProgress(10);
+      setCurrentStructuringStep(0);
+      timer = setInterval(() => {
+        setStructuringProgress((prev) => {
+          if (prev < 30) {
+            setCurrentStructuringStep(0);
+            return prev + 6;
+          } else if (prev < 65) {
+            setCurrentStructuringStep(1);
+            return prev + 5;
+          } else if (prev < 90) {
+            setCurrentStructuringStep(2);
+            return prev + 4;
+          } else if (prev < 98) {
+            setCurrentStructuringStep(3);
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 350);
+    } else {
+      setStructuringProgress(0);
+      setCurrentStructuringStep(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isStructuring]);
+
+  // Re-OCR / Page Upload Timer
+  useEffect(() => {
+    let timer: any;
+    if (isReOCRing || isUploadingMore) {
+      setOcrProgress(15);
+      setCurrentOcrStep(0);
+      timer = setInterval(() => {
+        setOcrProgress((prev) => {
+          if (prev < 45) {
+            setCurrentOcrStep(0);
+            return prev + 10;
+          } else if (prev < 80) {
+            setCurrentOcrStep(1);
+            return prev + 8;
+          } else if (prev < 98) {
+            setCurrentOcrStep(2);
+            return prev + 2;
+          }
+          return prev;
+        });
+      }, 300);
+    } else {
+      setOcrProgress(0);
+      setCurrentOcrStep(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isReOCRing, isUploadingMore]);
 
   if (!isOpen) return null;
 
@@ -260,6 +344,28 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
           </div>
         </div>
 
+        {/* AI Structuring Progress Bar Stepper Banner */}
+        {isStructuring && (
+          <div className="p-4 bg-slate-950/95 border-b border-indigo-500/30 animate-in fade-in shrink-0">
+            <AIProgressStepper
+              title="Gemini AI Curriculum Structuring Pipeline"
+              subtitle={`Converting ${pages.length || 1} note pages into a 12-week structured textbook with glossary`}
+              steps={structuringSteps}
+              currentStepIndex={currentStructuringStep}
+              progressPercentage={structuringProgress}
+              statusMessage={
+                currentStructuringStep === 0
+                  ? 'Auditing transcribed OCR pages and verifying note layouts...'
+                  : currentStructuringStep === 1
+                  ? 'Gemini AI is generating 12-week topics, learning outcomes & lesson subheadings...'
+                  : currentStructuringStep === 2
+                  ? 'Building automated glossary index and formatting Word (.docx) tables...'
+                  : 'Finalizing curriculum workspace and opening Human Review Gate...'
+              }
+            />
+          </div>
+        )}
+
         {/* Content Body */}
         {pages.length === 0 ? (
           /* Empty State if 0 pages */
@@ -392,10 +498,22 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
                       <span className="block font-bold text-white text-xs truncate">
                         Page #{p.page_order}
                       </span>
-                      <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5 mt-0.5">
-                        <Check className="w-3 h-3" />
-                        {Math.round((p.ocr_confidence || 0.95) * 100)}% Match
-                      </span>
+                      {(p.ocr_confidence || 0) >= 0.99 ? (
+                        <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 mt-0.5">
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          100% Verified
+                        </span>
+                      ) : p.raw_ocr_text?.toLowerCase().includes('scanned page') || (p.ocr_confidence || 0) < 0.3 ? (
+                        <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5 mt-0.5">
+                          <AlertCircle className="w-3 h-3 text-amber-400" />
+                          Needs OCR
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-0.5 mt-0.5">
+                          <Check className="w-3 h-3 text-indigo-400" />
+                          {Math.round((p.ocr_confidence || 0.95) * 100)}% Match
+                        </span>
+                      )}
                     </div>
                   </button>
                 ))}
@@ -456,12 +574,45 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
 
               {/* Right Column: Editable Transcribed OCR Text */}
               <div className="p-4 flex flex-col bg-[#0b0f19] overflow-y-auto space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                {(isReOCRing || isUploadingMore) && (
+                  <AIProgressStepper
+                    title="Gemini Multimodal Vision OCR Engine"
+                    subtitle="Scanning handwritten notes & extracting text layout"
+                    steps={ocrProcessingSteps}
+                    currentStepIndex={currentOcrStep}
+                    progressPercentage={ocrProgress}
+                    statusMessage={
+                      currentOcrStep === 0
+                        ? 'Loading scanned page image or note text...'
+                        : currentOcrStep === 1
+                        ? 'Gemini Vision AI is transcribing handwritten notes & tables...'
+                        : 'Syncing transcribed output to the interactive editor...'
+                    }
+                    className="mb-1"
+                  />
+                )}
+
+                <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-indigo-400" />
                     <span className="font-bold text-white text-xs">
                       Transcribed OCR Output (Editable)
                     </span>
+                    {currentPage && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                        (currentPage.ocr_confidence || 0) >= 0.99
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : currentPage.raw_ocr_text?.toLowerCase().includes('scanned page') || (currentPage.ocr_confidence || 0) < 0.3
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                          : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+                      }`}>
+                        {(currentPage.ocr_confidence || 0) >= 0.99
+                          ? '✓ 100% Verified Match'
+                          : currentPage.raw_ocr_text?.toLowerCase().includes('scanned page') || (currentPage.ocr_confidence || 0) < 0.3
+                          ? '⚠ Needs OCR'
+                          : `${Math.round((currentPage.ocr_confidence || 0.95) * 100)}% Match`}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -478,16 +629,17 @@ export const OCRViewerModal: React.FC<OCRViewerModalProps> = ({
                     <button
                       onClick={handleSaveText}
                       disabled={isSaving}
-                      className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-full shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                      className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-full shadow-lg shadow-emerald-600/30 transition-all disabled:opacity-50 cursor-pointer border border-emerald-400/30"
+                      title="Save text and mark as 100% verified match"
                     >
                       {isSaving ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : saveSuccess ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                       ) : (
-                        <Save className="w-3.5 h-3.5" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
                       )}
-                      <span>{saveSuccess ? 'Saved!' : 'Save Page Text'}</span>
+                      <span>{saveSuccess ? '100% Verified!' : 'Save & Mark 100% Match'}</span>
                     </button>
                   </div>
                 </div>

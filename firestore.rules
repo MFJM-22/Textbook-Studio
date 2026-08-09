@@ -15,6 +15,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    match /test/{testId} {
+      allow read: if true;
+    }
+
+    match /authors/{userId} {
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
     match /books/{bookId} {
       allow get: if isSignedIn() && isValidId(bookId) && resource.data.userId == request.auth.uid;
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;

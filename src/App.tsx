@@ -35,6 +35,8 @@ import {
   saveWeeksToFirestore,
   saveGlossaryToFirestore,
   fetchGlossaryFromFirestore,
+  saveAuthorToFirestore,
+  fetchAuthorFromFirestore,
 } from './lib/firestoreService';
 
 function getCleanFallbackText(subject: string, pageNum: number): string {
@@ -238,6 +240,18 @@ export default function App() {
   };
 
   const loadAuthor = async () => {
+    if (currentUser) {
+      try {
+        const fsAuthor = await fetchAuthorFromFirestore(currentUser.uid);
+        if (fsAuthor) {
+          setAuthor(fsAuthor);
+          return;
+        }
+      } catch (err) {
+        console.warn('Error loading author profile from Firestore:', err);
+      }
+    }
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
@@ -333,7 +347,12 @@ export default function App() {
         body: JSON.stringify(updated),
       });
       const data = await res.json();
-      setAuthor(data);
+      const newAuthor = { ...author, ...data };
+      setAuthor(newAuthor);
+
+      if (currentUser) {
+        await saveAuthorToFirestore(newAuthor, currentUser.uid);
+      }
     } catch (err) {
       console.error('Error updating author profile:', err);
     }
@@ -583,7 +602,11 @@ export default function App() {
   // Page level OCR updates
   const handleUpdatePageText = async (pageId: string, text: string) => {
     if (!selectedBook) return;
-    setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, raw_ocr_text: text, ocr_confidence: 1.0 } : p)));
+    const updatedPages = pages.map((p) => (p.id === pageId ? { ...p, raw_ocr_text: text, ocr_confidence: 1.0 } : p));
+    setPages(updatedPages);
+    if (currentUser) {
+      await savePagesToFirestore(selectedBook.id, updatedPages);
+    }
     try {
       const res = await fetch(`/api/books/${selectedBook.id}/re-ocr-page`, {
         method: 'POST',
@@ -592,7 +615,11 @@ export default function App() {
       });
       if (res.ok) {
         const updatedPage = await res.json();
-        setPages((prev) => prev.map((p) => (p.id === pageId ? updatedPage : p)));
+        const finalPages = pages.map((p) => (p.id === pageId ? updatedPage : p));
+        setPages(finalPages);
+        if (currentUser) {
+          await savePagesToFirestore(selectedBook.id, finalPages);
+        }
       }
     } catch (err) {
       console.warn('Error updating page text on server:', err);
@@ -609,7 +636,11 @@ export default function App() {
       });
       if (res.ok) {
         const updatedPage = await res.json();
-        setPages((prev) => prev.map((p) => (p.id === pageId ? updatedPage : p)));
+        const updatedPages = pages.map((p) => (p.id === pageId ? updatedPage : p));
+        setPages(updatedPages);
+        if (currentUser) {
+          await savePagesToFirestore(selectedBook.id, updatedPages);
+        }
       }
     } catch (err) {
       console.warn('Error re-running OCR on server:', err);
@@ -747,6 +778,37 @@ export default function App() {
     } catch (err) {
       console.error('Error deleting term:', err);
     }
+  };
+
+  // PDF Export Download
+  const handleDownloadPdf = async (book?: Book) => {
+    const targetBook = book || selectedBook;
+    if (!targetBook) return;
+
+    try {
+      const res = await fetch(`/api/books/${targetBook.id}/generate-pdf`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${targetBook.title.replace(/[^a-zA-Z0-9_\-]/g, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        await loadAuthor();
+        return;
+      }
+      console.warn('Server PDF generation returned non-200 status, opening print view...');
+    } catch (err) {
+      console.warn('Server PDF export error, opening print view as fallback:', err);
+    }
+
+    // Fallback: open print view if endpoint fails
+    handleOpenPrintView(targetBook);
   };
 
   // DOCX Export Download
@@ -955,6 +1017,7 @@ export default function App() {
                     onReview={() => handleOpenReviewView(book)}
                     onViewPages={() => handleOpenOCRView(book)}
                     onExportDocx={() => handleExportDocx(book)}
+                    onDownloadPdf={() => handleDownloadPdf(book)}
                     onPrintPreview={() => handleOpenPrintView(book)}
                     onDelete={handleDeleteBook}
                   />

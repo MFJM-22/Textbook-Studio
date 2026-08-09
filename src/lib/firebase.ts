@@ -11,8 +11,15 @@ async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.includes('client is offline') ||
+      message.includes('unavailable') ||
+      (error && typeof error === 'object' && 'code' in error && (error as any).code === 'unavailable')
+    ) {
+      console.info('Firestore notice: Connection deferred or client operating in offline mode.');
+    } else {
+      console.debug('Firestore connection check completed:', message);
     }
   }
 }
