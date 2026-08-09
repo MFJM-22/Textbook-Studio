@@ -101,17 +101,25 @@ async function extractTextFromImageWithGemini(imgSrc: string, promptText: string
 
   if (!base64Data) return '';
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.6-flash',
-    contents: {
-      parts: [
-        { inlineData: { mimeType, data: base64Data } },
-        { text: promptText },
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { inlineData: { mimeType, data: base64Data } },
+            { text: promptText },
+          ],
+        },
       ],
-    },
-  });
+    });
 
-  return (response.text || '').trim();
+    return (response.text || '').trim();
+  } catch (err) {
+    console.error('Gemini Vision OCR API Error:', err);
+    return '';
+  }
 }
 
 // Helper for clean fallback text if OCR extraction returns empty
@@ -408,7 +416,7 @@ Structure the extracted notes into an array of Weeks. Each Week must have:
 Return strictly valid JSON corresponding to this schema.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
       contents: contentsInput,
       config: {
         systemInstruction: systemPrompt,
@@ -468,7 +476,7 @@ Return strictly valid JSON corresponding to this schema.`;
     console.error('Structuring AI Error:', err);
   }
 
-  // Fallback Structuring: Guarantee structured weeks if Gemini fails or returns empty array
+  // Fallback Structuring: Guarantee structured weeks matching actual week content
   weeksStore = weeksStore.filter((w) => w.book_id !== bookId);
   const effectivePages = pages.length > 0 ? pages : [
     {
@@ -483,17 +491,32 @@ Return strictly valid JSON corresponding to this schema.`;
     }
   ];
 
-  const fallbackWeeks: Week[] = effectivePages.map((p, idx) => {
-    const rawText = (p.raw_ocr_text || '').trim();
-    const lines = rawText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  // Group pages by explicitly stated week numbers (e.g., "Week 1", "Week 2")
+  // If no multiple week markers exist, group all pages into a single Week 1
+  const weekMap = new Map<number, { topic: string; pageTexts: string[] }>();
 
-    let topicLine = `Week ${idx + 1}: ${book.subject || 'Lesson Unit'}`;
-    if (lines.length > 0) {
-      const topicCandidate = lines.find((l) => /^week|\btopic\b/i.test(l)) || lines[0];
-      if (topicCandidate && !topicCandidate.startsWith('|')) {
-        topicLine = topicCandidate.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim();
+  effectivePages.forEach((p, idx) => {
+    const rawText = (p.raw_ocr_text || '').trim();
+    const weekMatch = rawText.match(/\bWEEK\s*(\d+)/i);
+    const weekNum = weekMatch ? parseInt(weekMatch[1], 10) : 1;
+
+    if (!weekMap.has(weekNum)) {
+      const lines = rawText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+      let topicCandidate = `${book.subject || 'Lesson Unit'}`;
+      if (lines.length > 0) {
+        const found = lines.find((l) => /^week|\btopic\b/i.test(l)) || lines[0];
+        if (found && !found.startsWith('|')) {
+          topicCandidate = found.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim() || topicCandidate;
+        }
       }
+      weekMap.set(weekNum, { topic: topicCandidate, pageTexts: [] });
     }
+    weekMap.get(weekNum)!.pageTexts.push(rawText);
+  });
+
+  const fallbackWeeks: Week[] = Array.from(weekMap.entries()).map(([weekNum, data], idx) => {
+    const combinedText = data.pageTexts.join('\n\n');
+    const lines = combinedText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
 
     const sections: { subheading: string; paragraphs: string[] }[] = [];
     let currentSubheading = 'Lesson Content & Core Notes';
@@ -552,8 +575,8 @@ Return strictly valid JSON corresponding to this schema.`;
     const wObj: Week = {
       id: `w-fb-${Date.now()}-${idx + 1}`,
       book_id: bookId,
-      week_number: idx + 1,
-      topic: topicLine || `Week ${idx + 1} Unit`,
+      week_number: weekNum,
+      topic: data.topic || `Week ${weekNum} Unit`,
       content_json: normalizedSections,
       created_at: new Date().toISOString(),
     };
@@ -607,7 +630,7 @@ app.post('/api/books/:id/approve-structure', async (req, res) => {
     const prompt = `Extract a list of 5 to 15 key technical terms, vocabulary words, and concepts with clear concise definitions from the following textbook material:\n\n${textContent}`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
