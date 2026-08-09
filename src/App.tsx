@@ -25,6 +25,7 @@ import { AuthModal } from './components/AuthModal';
 import { LandingPage } from './components/LandingPage';
 import { Footer } from './components/Footer';
 import { generateBookDocxBlob } from './lib/docGenerator';
+import { downloadBookPdfClient } from './lib/pdfGenerator';
 import { useAuth } from './context/AuthContext';
 import {
   saveBookToFirestore,
@@ -785,30 +786,35 @@ export default function App() {
     const targetBook = book || selectedBook;
     if (!targetBook) return;
 
-    try {
-      const res = await fetch(`/api/books/${targetBook.id}/generate-pdf`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${targetBook.title.replace(/[^a-zA-Z0-9_\-]/g, '_')}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        await loadAuthor();
-        return;
+    let targetWeeks = weeks;
+    let targetGlossary = glossary;
+
+    if (!selectedBook || selectedBook.id !== targetBook.id || targetWeeks.length === 0) {
+      try {
+        const details = await fetchBookDetails(targetBook.id);
+        if (details?.weeks && details.weeks.length > 0) {
+          targetWeeks = details.weeks;
+        }
+        if (details?.glossary && details.glossary.length > 0) {
+          targetGlossary = details.glossary;
+        }
+        if (targetWeeks.length === 0 && details?.pages) {
+          targetWeeks = structurePagesIntoWeeks(details.pages, targetBook);
+        }
+      } catch (e) {
+        console.warn('Error fetching book details for PDF:', e);
       }
-      console.warn('Server PDF generation returned non-200 status, opening print view...');
-    } catch (err) {
-      console.warn('Server PDF export error, opening print view as fallback:', err);
     }
 
-    // Fallback: open print view if endpoint fails
-    handleOpenPrintView(targetBook);
+    try {
+      const safeAuthor = author || { id: '1', name: 'Curriculum Author', credentials: 'B.Ed', bio: 'Textbook author.' };
+      downloadBookPdfClient(targetBook, safeAuthor, targetWeeks, targetGlossary);
+      await loadAuthor();
+      return;
+    } catch (err) {
+      console.warn('Client PDF export error, opening print view as fallback:', err);
+      handleOpenPrintView(targetBook);
+    }
   };
 
   // DOCX Export Download

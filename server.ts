@@ -780,10 +780,15 @@ app.post('/api/books/:id/generate-docx', async (req, res) => {
 // 11. Generate PDF Export Endpoint
 app.post('/api/books/:id/generate-pdf', async (req, res) => {
   const bookId = req.params.id;
-  const book = getOrCreateBook(bookId);
+  const book = req.body?.book || getOrCreateBook(bookId);
+  const author = req.body?.author || currentAuthor;
 
-  let weeks = weeksStore.filter((w) => w.book_id === bookId).sort((a, b) => a.week_number - b.week_number);
-  const glossary = glossaryStore.filter((g) => g.book_id === bookId);
+  let weeks = (req.body?.weeks && Array.isArray(req.body.weeks) && req.body.weeks.length > 0)
+    ? req.body.weeks
+    : weeksStore.filter((w) => w.book_id === bookId).sort((a, b) => a.week_number - b.week_number);
+  const glossary = (req.body?.glossary && Array.isArray(req.body.glossary))
+    ? req.body.glossary
+    : glossaryStore.filter((g) => g.book_id === bookId);
 
   // If no weeks exist yet, auto-generate default lesson units from pages or fallback
   if (weeks.length === 0) {
@@ -827,7 +832,7 @@ app.post('/api/books/:id/generate-pdf', async (req, res) => {
   }
 
   try {
-    const pdfBuffer = await generateBookPdf(book, currentAuthor, weeks, glossary);
+    const pdfBuffer = await generateBookPdf(book, author, weeks, glossary);
 
     book.status = 'generated';
 

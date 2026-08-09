@@ -2,12 +2,12 @@ import { jsPDF } from 'jspdf';
 import { Author, Book, Week, GlossaryTerm } from '../types';
 import { parseMarkdownTable, normalizeContentSections } from './docGenerator';
 
-export async function generateBookPdf(
+export function buildJsPdfDoc(
   book: Book,
   author: Author,
   weeks: Week[],
   glossary?: GlossaryTerm[]
-): Promise<Buffer> {
+): jsPDF {
   const doc = new jsPDF({
     unit: 'mm',
     format: 'a4',
@@ -316,8 +316,29 @@ export async function generateBookPdf(
     addPageHeaderAndFooter(i, totalPageCount);
   }
 
+  return doc;
+}
+
+export async function generateBookPdf(
+  book: Book,
+  author: Author,
+  weeks: Week[],
+  glossary?: GlossaryTerm[]
+): Promise<Buffer> {
+  const doc = buildJsPdfDoc(book, author, weeks, glossary);
   const pdfArrayBuffer = doc.output('arraybuffer');
   return Buffer.from(pdfArrayBuffer);
+}
+
+export function downloadBookPdfClient(
+  book: Book,
+  author: Author,
+  weeks: Week[],
+  glossary?: GlossaryTerm[]
+): void {
+  const doc = buildJsPdfDoc(book, author, weeks, glossary);
+  const sanitizeFilename = (book.title || 'Textbook').replace(/[^a-zA-Z0-9_\-]/g, '_');
+  doc.save(`${sanitizeFilename}.pdf`);
 }
 
 function renderPdfTable(

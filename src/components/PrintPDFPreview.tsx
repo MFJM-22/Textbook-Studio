@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Printer, ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
 import { Author, Book, Week, GlossaryTerm } from '../types';
 import { parseMarkdownTable } from '../lib/docGenerator';
+import { downloadBookPdfClient } from '../lib/pdfGenerator';
 
 interface PrintPDFPreviewProps {
   book: Book;
@@ -16,6 +17,7 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
   book,
   author,
   weeks,
+  glossary,
   onBack,
   onExportDocx,
 }) => {
@@ -24,30 +26,10 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
   const handleDownloadPdf = async () => {
     setIsGeneratingPdf(true);
     try {
-      const response = await fetch(`/api/books/${book.id}/generate-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server returned status ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      const filename = `${(book.title || 'Textbook').replace(/[^a-zA-Z0-9_\-]/g, '_')}.pdf`;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
+      downloadBookPdfClient(book, author, safeWeeks, glossary);
     } catch (err) {
-      console.error('Server PDF generation error:', err);
-      // Fallback to browser print/save as PDF if server endpoint fails
+      console.error('Direct PDF generation error:', err);
+      // Fallback to browser print dialog
       try {
         window.print();
       } catch (printErr) {
