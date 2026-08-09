@@ -46,32 +46,32 @@ function getCleanFallbackText(subject: string, pageNum: number): string {
 function structurePagesIntoWeeks(pages: Page[], book: Book): Week[] {
   if (!pages || pages.length === 0) return [];
 
-  return pages.map((p, idx) => {
-    const text = (p.raw_ocr_text || '').trim();
-    if (!text || text.includes('Scanned page') || text.includes('No text could be extracted')) {
-      return {
-        id: `w-struct-${Date.now()}-${idx + 1}`,
-        book_id: book.id,
-        week_number: idx + 1,
-        topic: `Week ${idx + 1}: ${book.subject || 'Lesson Unit'}`,
-        content_json: [
-          {
-            subheading: 'Lesson Content',
-            paragraphs: ['Lesson notes uploaded for this unit.'],
-          },
-        ],
-        created_at: new Date().toISOString(),
-      };
-    }
+  // Group pages by explicitly stated week numbers (e.g. "WEEK 1", "WEEK 2")
+  // If no "WEEK 2" or higher marker is found, group ALL pages into Week 1
+  const weekMap = new Map<number, { topic: string; pageTexts: string[] }>();
 
-    const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-    let topic = `Week ${idx + 1}: ${book.subject || 'Lesson Unit'}`;
-    if (lines.length > 0) {
-      const candidate = lines.find((l) => /^week|\btopic\b/i.test(l)) || lines[0];
-      if (candidate && !candidate.startsWith('|')) {
-        topic = candidate.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim();
+  pages.forEach((p) => {
+    const rawText = (p.raw_ocr_text || '').trim();
+    const weekMatch = rawText.match(/\bWEEK\s*(\d+)/i);
+    const weekNum = weekMatch ? parseInt(weekMatch[1], 10) : 1;
+
+    if (!weekMap.has(weekNum)) {
+      const lines = rawText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+      let topicCandidate = `${book.subject || 'Lesson Unit'}`;
+      if (lines.length > 0) {
+        const found = lines.find((l) => /^week|\btopic\b/i.test(l)) || lines[0];
+        if (found && !found.startsWith('|')) {
+          topicCandidate = found.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim() || topicCandidate;
+        }
       }
+      weekMap.set(weekNum, { topic: topicCandidate, pageTexts: [] });
     }
+    weekMap.get(weekNum)!.pageTexts.push(rawText);
+  });
+
+  return Array.from(weekMap.entries()).map(([weekNum, data], idx) => {
+    const combinedText = data.pageTexts.join('\n\n');
+    const lines = combinedText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
 
     const sections: { subheading: string; paragraphs: string[] }[] = [];
     let currentSubheading = 'Lesson Content & Notes';
@@ -99,9 +99,9 @@ function structurePagesIntoWeeks(pages: Page[], book: Book): Week[] {
         continue;
       }
       flushTable();
-      if (line.startsWith('#') || line.startsWith('WEEK') || line.startsWith('TOPIC:') || (line.endsWith(':') && line.length < 60)) {
+      if (line.startsWith('#') || line.startsWith('WEEK') || line.startsWith('TOPIC:') || line.startsWith('SECTION:') || (line.endsWith(':') && line.length < 60)) {
         flushSection();
-        const sub = line.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').trim();
+        const sub = line.replace(/^[#\s*]+/, '').replace(/^WEEK \d+:?/i, '').replace(/^TOPIC:?/i, '').replace(/^SECTION:?/i, '').trim();
         if (sub) currentSubheading = sub;
       } else {
         currentParagraphs.push(line);
@@ -119,8 +119,8 @@ function structurePagesIntoWeeks(pages: Page[], book: Book): Week[] {
     return {
       id: `w-struct-${Date.now()}-${idx + 1}`,
       book_id: book.id,
-      week_number: idx + 1,
-      topic: topic || `Week ${idx + 1} Unit`,
+      week_number: weekNum,
+      topic: data.topic || `Week ${weekNum} Unit`,
       content_json: sections,
       created_at: new Date().toISOString(),
     };
