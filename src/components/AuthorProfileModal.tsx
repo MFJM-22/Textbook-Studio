@@ -54,7 +54,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
           <div>
-            <label className="block font-bold text-slate-300 mb-1.5">Author Name *</label>
+            <label className="block font-bold text-slate-300 mb-1.5">Author Name</label>
             <input
               type="text"
               required
@@ -66,7 +66,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
           </div>
 
           <div>
-            <label className="block font-bold text-slate-300 mb-1.5">Professional Credentials *</label>
+            <label className="block font-bold text-slate-300 mb-1.5">Professional Credentials</label>
             <input
               type="text"
               required
@@ -98,7 +98,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
           </div>
 
           <div>
-            <label className="block font-bold text-slate-300 mb-1.5">About the Author Bio *</label>
+            <label className="block font-bold text-slate-300 mb-1.5">About the Author Bio</label>
             <textarea
               rows={4}
               required

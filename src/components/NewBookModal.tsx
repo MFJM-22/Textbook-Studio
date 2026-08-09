@@ -277,7 +277,7 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Subject *</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Subject</label>
                   <input
                     type="text"
                     required
@@ -288,7 +288,7 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Class Level *</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Class Level</label>
                   <input
                     type="text"
                     required
@@ -299,7 +299,7 @@ export const NewBookModal: React.FC<NewBookModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Term *</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Term</label>
                   <select
                     value={term}
                     onChange={(e) => setTerm(e.target.value)}
