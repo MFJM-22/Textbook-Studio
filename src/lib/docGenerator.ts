@@ -16,10 +16,16 @@ import {
 } from 'docx';
 import { Author, Book, Week, GlossaryTerm } from '../types';
 
-export function parseMarkdownTable(text: string): {
+export interface MarkdownTableData {
   headers: string[];
   rows: string[][];
-} | null {
+}
+
+export type ParagraphBlock =
+  | { type: 'text'; content: string }
+  | { type: 'table'; data: MarkdownTableData };
+
+export function parseMarkdownTable(text: string): MarkdownTableData | null {
   if (!text || typeof text !== 'string') return null;
 
   // 1. Pre-process escaped newlines, carriage returns, and row boundary markers
@@ -28,8 +34,9 @@ export function parseMarkdownTable(text: string): {
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n');
 
-  // Replace double-pipe row boundaries like "GROUP VIII || ---" or "He (2) || 2"
-  cleanText = cleanText.replace(/([^|\s])\s*\|\s*\|\s*([^|\s])/g, '$1 |\n| $2');
+  // Replace double-pipe row boundaries "||" or "| |" between content cells with line breaks
+  cleanText = cleanText.replace(/(\|\s*)\|\s*(?=\|)/g, '$1\n|');
+  cleanText = cleanText.replace(/([^|\s\n])\s*\|\s*\|\s*([^|\s\n])/g, '$1 |\n| $2');
 
   // Break lines before separator rows like "| --- |" if concatenated to header
   cleanText = cleanText.replace(/([^|\n])\s*(\|\s*:?---+[\s\-:|]*\|)/g, '$1\n$2');
@@ -37,25 +44,36 @@ export function parseMarkdownTable(text: string): {
   // Break lines after separator rows if concatenated to first data row
   cleanText = cleanText.replace(/(\|\s*:?---+[\s\-:|]*\|)\s*([^|\n])/g, '$1\n$2');
 
-  const lines = cleanText.trim().split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  // Break lines between adjacent pipe rows if separated by space: "| col1 | col2 |  | col3 | col4 |"
+  cleanText = cleanText.replace(/(\|\s*)\s+(\|\s*[^\s|\-:\n])/g, '$1\n$2');
 
-  const parseRow = (line: string) => {
+  const lines = cleanText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const parseRow = (line: string): string[] => {
     let cleaned = line.trim();
     if (cleaned.startsWith('|')) cleaned = cleaned.substring(1);
     if (cleaned.endsWith('|')) cleaned = cleaned.substring(0, cleaned.length - 1);
     return cleaned.split('|').map((cell) => cell.trim());
   };
 
-  const tableLines = lines.filter((l) => l.startsWith('|') && (l.endsWith('|') || l.includes('|', 1)));
+  const tableLines = lines.filter((l) => l.includes('|'));
 
   if (tableLines.length >= 2) {
-    const headers = parseRow(tableLines[0]);
-    if (headers && headers.length > 0) {
+    let headerIndex = 0;
+    if (/^\|?[\s\-:|]+\|?$/.test(tableLines[0])) {
+      headerIndex = 1;
+    }
+
+    const headers = parseRow(tableLines[headerIndex]);
+    if (headers && headers.length > 0 && headers.some((h) => h.length > 0)) {
       const rows: string[][] = [];
-      for (let i = 1; i < tableLines.length; i++) {
+      for (let i = headerIndex + 1; i < tableLines.length; i++) {
         const rowStr = tableLines[i];
-        // Skip separator row like | --- | --- |
-        if (rowStr.replace(/[\s|\-:]/g, '').length === 0) continue;
+        if (/^\|?[\s\-:|]+\|?$/.test(rowStr)) continue;
+
         const cells = parseRow(rowStr);
         if (cells.length > 0) {
           while (cells.length < headers.length) cells.push('');
@@ -69,18 +87,16 @@ export function parseMarkdownTable(text: string): {
   }
 
   // 2. Fallback: single-line pipe parsing if multi-line splitting didn't yield a valid table
-  const allCells = text
-    .replace(/\\n/g, ' ')
+  const allCells = cleanText
+    .replace(/\n/g, ' ')
     .split('|')
     .map((c) => c.trim());
 
-  // Remove empty leading/trailing cells caused by outer '|'
-  if (allCells.length > 0 && allCells[0] === '') allCells.shift();
-  if (allCells.length > 0 && allCells[allCells.length - 1] === '') allCells.pop();
+  while (allCells.length > 0 && allCells[0] === '') allCells.shift();
+  while (allCells.length > 0 && allCells[allCells.length - 1] === '') allCells.pop();
 
   if (allCells.length === 0) return null;
 
-  // Find separator cells block
   let sepStartIndex = -1;
   let sepEndIndex = -1;
 
@@ -115,6 +131,78 @@ export function parseMarkdownTable(text: string): {
   return null;
 }
 
+export function parseParagraphBlocks(text: string): ParagraphBlock[] {
+  if (!text || typeof text !== 'string' || !text.trim()) return [];
+
+  if (!text.includes('|')) {
+    return [{ type: 'text', content: text }];
+  }
+
+  const directTable = parseMarkdownTable(text);
+  if (directTable) {
+    return [{ type: 'table', data: directTable }];
+  }
+
+  let cleanText = text
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/(\|\s*)\|\s*(?=\|)/g, '$1\n|')
+    .replace(/([^|\s\n])\s*\|\s*\|\s*([^|\s\n])/g, '$1 |\n| $2')
+    .replace(/([^|\n])\s*(\|\s*:?---+[\s\-:|]*\|)/g, '$1\n$2')
+    .replace(/(\|\s*:?---+[\s\-:|]*\|)\s*([^|\n])/g, '$1\n$2')
+    .replace(/(\|\s*)\s+(\|\s*[^\s|\-:\n])/g, '$1\n$2');
+
+  const lines = cleanText.split('\n');
+  const blocks: ParagraphBlock[] = [];
+  let textBuffer: string[] = [];
+  let tableBuffer: string[] = [];
+
+  const flushText = () => {
+    if (textBuffer.length > 0) {
+      const str = textBuffer.join('\n').trim();
+      if (str) blocks.push({ type: 'text', content: str });
+      textBuffer = [];
+    }
+  };
+
+  const flushTable = () => {
+    if (tableBuffer.length > 0) {
+      const tableStr = tableBuffer.join('\n');
+      const tableData = parseMarkdownTable(tableStr);
+      if (tableData) {
+        blocks.push({ type: 'table', data: tableData });
+      } else {
+        const str = tableBuffer.join('\n').trim();
+        if (str) blocks.push({ type: 'text', content: str });
+      }
+      tableBuffer = [];
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const isTableLine =
+      trimmed.startsWith('|') ||
+      (trimmed.includes('|') && (trimmed.includes('---') || trimmed.endsWith('|')));
+
+    if (isTableLine) {
+      flushText();
+      tableBuffer.push(line);
+    } else {
+      if (tableBuffer.length > 0) {
+        flushTable();
+      }
+      textBuffer.push(line);
+    }
+  }
+
+  flushText();
+  flushTable();
+
+  return blocks.length > 0 ? blocks : [{ type: 'text', content: text }];
+}
+
 export function normalizeContentSections(sections: any): any[] {
   let list = sections;
   if (typeof sections === 'string') {
@@ -142,64 +230,22 @@ export function normalizeContentSections(sections: any): any[] {
       }
     }
 
-    // 2. Normalize paragraphs: if a paragraph is a table (even single-line), convert it to clean multi-line markdown table
+    // 2. Normalize paragraphs using parseParagraphBlocks
     const newParagraphs: string[] = [];
-    let tableBuffer: string[] = [];
-
-    const flushTable = () => {
-      if (tableBuffer.length > 0) {
-        const rawTableText = tableBuffer.join('\n');
-        const parsed = parseMarkdownTable(rawTableText);
-        if (parsed) {
-          const headerStr = `| ${parsed.headers.join(' | ')} |`;
-          const sepStr = `| ${parsed.headers.map(() => '---').join(' | ')} |`;
-          const rowStrs = parsed.rows.map((r) => `| ${r.join(' | ')} |`);
-          newParagraphs.push([headerStr, sepStr, ...rowStrs].join('\n'));
-        } else {
-          newParagraphs.push(rawTableText);
-        }
-        tableBuffer = [];
-      }
-    };
-
     for (const p of paragraphs) {
       if (typeof p !== 'string') continue;
-      const trimmed = p.trim();
-
-      // Check if p itself is already a full single-line or multi-line table
-      const directTable = parseMarkdownTable(p);
-      if (directTable) {
-        flushTable();
-        const headerStr = `| ${directTable.headers.join(' | ')} |`;
-        const sepStr = `| ${directTable.headers.map(() => '---').join(' | ')} |`;
-        const rowStrs = directTable.rows.map((r) => `| ${r.join(' | ')} |`);
-        newParagraphs.push([headerStr, sepStr, ...rowStrs].join('\n'));
-        continue;
-      }
-
-      if (trimmed.startsWith('|') && (trimmed.endsWith('|') || trimmed.includes('|', 1))) {
-        if (p.includes('\n')) {
-          flushTable();
-          const parsed = parseMarkdownTable(p);
-          if (parsed) {
-            const headerStr = `| ${parsed.headers.join(' | ')} |`;
-            const sepStr = `| ${parsed.headers.map(() => '---').join(' | ')} |`;
-            const rowStrs = parsed.rows.map((r) => `| ${r.join(' | ')} |`);
-            newParagraphs.push([headerStr, sepStr, ...rowStrs].join('\n'));
-          } else {
-            newParagraphs.push(p);
-          }
-        } else {
-          tableBuffer.push(trimmed);
-        }
-      } else {
-        flushTable();
-        if (trimmed.length > 0) {
-          newParagraphs.push(p);
+      const blocks = parseParagraphBlocks(p);
+      for (const b of blocks) {
+        if (b.type === 'table') {
+          const headerStr = `| ${b.data.headers.join(' | ')} |`;
+          const sepStr = `| ${b.data.headers.map(() => '---').join(' | ')} |`;
+          const rowStrs = b.data.rows.map((r) => `| ${r.join(' | ')} |`);
+          newParagraphs.push([headerStr, sepStr, ...rowStrs].join('\n'));
+        } else if (b.content.trim()) {
+          newParagraphs.push(b.content);
         }
       }
     }
-    flushTable();
 
     return {
       subheading: sec.subheading || 'Lesson Section',
@@ -439,18 +485,20 @@ export function buildDocxDocument(
 
       if (Array.isArray(sec.paragraphs)) {
         sec.paragraphs.forEach((pText: string) => {
-          const tableData = parseMarkdownTable(pText);
-          if (tableData) {
-            sectionsChildren.push(createDocxTable(tableData));
-            sectionsChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
-          } else {
-            sectionsChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: pText || '', size: 24, color: '334155' })],
-                spacing: { after: 200 },
-              })
-            );
-          }
+          const blocks = parseParagraphBlocks(pText);
+          blocks.forEach((block) => {
+            if (block.type === 'table') {
+              sectionsChildren.push(createDocxTable(block.data));
+              sectionsChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+            } else if (block.content && block.content.trim()) {
+              sectionsChildren.push(
+                new Paragraph({
+                  children: [new TextRun({ text: block.content, size: 24, color: '334155' })],
+                  spacing: { after: 200 },
+                })
+              );
+            }
+          });
         });
       }
 

@@ -16,7 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Book, Week, ContentSection } from '../types';
-import { parseMarkdownTable, normalizeContentSections } from '../lib/docGenerator';
+import { parseMarkdownTable, parseParagraphBlocks, normalizeContentSections } from '../lib/docGenerator';
 
 interface HumanReviewEditorProps {
   book: Book;
@@ -574,49 +574,57 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
                   </h3>
 
                   {sec.paragraphs.map((p, pIdx) => {
-                    const tableData = parseMarkdownTable(p);
-                    if (tableData) {
-                      return (
-                        <div key={pIdx} className="my-4 overflow-x-auto">
-                          <table className="w-full text-xs border-collapse border border-white/10">
-                            <thead>
-                              <tr className="bg-slate-900">
-                                {tableData.headers.map((h, hIdx) => (
-                                  <th
-                                    key={hIdx}
-                                    className="border border-white/10 px-3 py-2 text-left font-bold text-white"
-                                  >
-                                    {h}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {tableData.rows.map((row, rIdx) => (
-                                <tr
-                                  key={rIdx}
-                                  className={rIdx % 2 === 0 ? 'bg-slate-900/60' : 'bg-slate-950/80'}
-                                >
-                                  {row.map((cell, cIdx) => (
-                                    <td
-                                      key={cIdx}
-                                      className="border border-white/10 px-3 py-2 text-slate-300"
-                                    >
-                                      {cell}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      );
-                    }
-
+                    const blocks = parseParagraphBlocks(p);
                     return (
-                      <p key={pIdx} className="text-xs text-slate-300 leading-relaxed">
-                        {p}
-                      </p>
+                      <React.Fragment key={pIdx}>
+                        {blocks.map((block, bIdx) => {
+                          if (block.type === 'table') {
+                            return (
+                              <div key={bIdx} className="my-4 overflow-x-auto rounded border border-indigo-500/30 bg-slate-900/90 shadow-sm">
+                                <table className="w-full text-xs border-collapse">
+                                  <thead>
+                                    <tr className="bg-indigo-950/80 border-b border-indigo-500/30">
+                                      {block.data.headers.map((h, hIdx) => (
+                                        <th
+                                          key={hIdx}
+                                          className="border-r border-indigo-500/20 last:border-r-0 px-3 py-2 text-left font-semibold text-indigo-100"
+                                        >
+                                          {h}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {block.data.rows.map((row, rIdx) => (
+                                      <tr
+                                        key={rIdx}
+                                        className={`border-b border-white/5 last:border-b-0 ${
+                                          rIdx % 2 === 0 ? 'bg-slate-900/60' : 'bg-slate-950/80'
+                                        }`}
+                                      >
+                                        {row.map((cell, cIdx) => (
+                                          <td
+                                            key={cIdx}
+                                            className="border-r border-white/5 last:border-r-0 px-3 py-2 text-slate-300"
+                                          >
+                                            {cell}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <p key={bIdx} className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
+                              {block.content}
+                            </p>
+                          );
+                        })}
+                      </React.Fragment>
                     );
                   })}
 

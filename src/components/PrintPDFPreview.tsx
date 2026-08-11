@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Printer, ArrowLeft, Download, FileText, Loader2 } from 'lucide-react';
 import { Author, Book, Week, GlossaryTerm } from '../types';
-import { parseMarkdownTable } from '../lib/docGenerator';
+import { parseMarkdownTable, parseParagraphBlocks } from '../lib/docGenerator';
 import { downloadBookPdfClient } from '../lib/pdfGenerator';
 
 interface PrintPDFPreviewProps {
@@ -196,43 +196,49 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
                 </h3>
 
                 {sec.paragraphs?.map((p, pIdx) => {
-                  const tableData = parseMarkdownTable(p);
-                  if (tableData) {
-                    return (
-                      <div key={pIdx} className="my-4 overflow-x-auto">
-                        <table className="w-full text-xs border-collapse border border-slate-300">
-                          <thead>
-                            <tr className="bg-slate-100">
-                              {tableData.headers.map((h, hIdx) => (
-                                <th
-                                  key={hIdx}
-                                  className="border border-slate-300 px-3 py-2 text-left font-bold text-slate-800"
-                                >
-                                  {h}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {tableData.rows.map((row, rIdx) => (
-                              <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                {row.map((cell, cIdx) => (
-                                  <td key={cIdx} className="border border-slate-300 px-3 py-2 text-slate-700">
-                                    {cell}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  }
-
+                  const blocks = parseParagraphBlocks(p);
                   return (
-                    <p key={pIdx} className="text-xs text-slate-700 leading-relaxed">
-                      {p}
-                    </p>
+                    <React.Fragment key={pIdx}>
+                      {blocks.map((block, bIdx) => {
+                        if (block.type === 'table') {
+                          return (
+                            <div key={bIdx} className="my-4 overflow-x-auto">
+                              <table className="w-full text-xs border-collapse border border-slate-300">
+                                <thead>
+                                  <tr className="bg-slate-100">
+                                    {block.data.headers.map((h, hIdx) => (
+                                      <th
+                                        key={hIdx}
+                                        className="border border-slate-300 px-3 py-2 text-left font-bold text-slate-800"
+                                      >
+                                        {h}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {block.data.rows.map((row, rIdx) => (
+                                    <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                      {row.map((cell, cIdx) => (
+                                        <td key={cIdx} className="border border-slate-300 px-3 py-2 text-slate-700">
+                                          {cell}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <p key={bIdx} className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
+                            {block.content}
+                          </p>
+                        );
+                      })}
+                    </React.Fragment>
                   );
                 })}
 

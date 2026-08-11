@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { Author, Book, Week, GlossaryTerm } from '../types';
-import { parseMarkdownTable, normalizeContentSections } from './docGenerator';
+import { parseMarkdownTable, parseParagraphBlocks, normalizeContentSections } from './docGenerator';
 
 export function buildJsPdfDoc(
   book: Book,
@@ -254,22 +254,24 @@ export function buildJsPdfDoc(
       // Paragraphs & Markdown Tables
       if (Array.isArray(sec.paragraphs)) {
         sec.paragraphs.forEach((pText: string) => {
-          const tableData = parseMarkdownTable(pText);
-          if (tableData) {
-            renderPdfTable(doc, tableData, marginLeft, currentY, contentWidth, (addedY) => {
-              currentY = addedY;
-            }, checkPageBreak);
-            currentY += 6;
-          } else if (pText && pText.trim()) {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(9.5);
-            doc.setTextColor(51, 65, 85);
-            const pLines = doc.splitTextToSize(pText, contentWidth);
-            const pHeight = pLines.length * 5;
-            checkPageBreak(pHeight + 2);
-            doc.text(pLines, marginLeft, currentY);
-            currentY += pHeight + 4;
-          }
+          const blocks = parseParagraphBlocks(pText);
+          blocks.forEach((block) => {
+            if (block.type === 'table') {
+              renderPdfTable(doc, block.data, marginLeft, currentY, contentWidth, (addedY) => {
+                currentY = addedY;
+              }, checkPageBreak);
+              currentY += 6;
+            } else if (block.content && block.content.trim()) {
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(9.5);
+              doc.setTextColor(51, 65, 85);
+              const pLines = doc.splitTextToSize(block.content, contentWidth);
+              const pHeight = pLines.length * 5;
+              checkPageBreak(pHeight + 2);
+              doc.text(pLines, marginLeft, currentY);
+              currentY += pHeight + 4;
+            }
+          });
         });
       }
     });
