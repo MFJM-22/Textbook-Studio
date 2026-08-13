@@ -34,6 +34,7 @@ import {
   MarkdownTableData,
   ParagraphBlock,
 } from '../lib/docGenerator';
+import { FormattedText } from '../lib/formatUtils';
 import { UploadWeekNotesModal } from './UploadWeekNotesModal';
 
 export interface DetectedTableInfo {
@@ -1319,9 +1320,9 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
                           }
 
                           return (
-                            <p key={bIdx} className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
-                              {block.content}
-                            </p>
+                            <div key={bIdx} className="text-xs text-slate-300 leading-relaxed my-1">
+                              <FormattedText text={block.content} />
+                            </div>
                           );
                         })}
                       </React.Fragment>

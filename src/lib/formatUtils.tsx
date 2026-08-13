@@ -80,22 +80,28 @@ export function parseRichTextSegments(rawText: string): FormattedSegment[] {
 /**
  * React component to render rich text segments cleanly
  */
-export const FormattedText: React.FC<{ text: string; className?: string }> = ({ text, className = '' }) => {
+export const FormattedText: React.FC<{ text: string; className?: string; as?: 'div' | 'span' }> = ({
+  text,
+  className = '',
+  as,
+}) => {
   if (!text) return null;
 
   const lines = text.split('\n');
+  const hasDivider = lines.some((line) => {
+    const segments = parseRichTextSegments(line);
+    return segments.length === 1 && segments[0].isDivider;
+  });
+
+  const Component = as || (hasDivider ? 'div' : 'span');
 
   return (
-    <span className={className}>
+    <Component className={className}>
       {lines.map((line, lIdx) => {
         const segments = parseRichTextSegments(line);
 
         if (segments.length === 1 && segments[0].isDivider) {
-          return (
-            <span key={lIdx} className="block my-3">
-              <hr className="border-slate-300 dark:border-white/10" />
-            </span>
-          );
+          return <hr key={lIdx} className="my-3 border-slate-300 dark:border-white/10" />;
         }
 
         return (
@@ -114,6 +120,6 @@ export const FormattedText: React.FC<{ text: string; className?: string }> = ({ 
           </React.Fragment>
         );
       })}
-    </span>
+    </Component>
   );
 };

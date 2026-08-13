@@ -411,9 +411,9 @@ export const PrintPDFPreview: React.FC<PrintPDFPreviewProps> = ({
                         }
 
                         return (
-                          <p key={bIdx} className="text-xs text-slate-700 leading-relaxed">
+                          <div key={bIdx} className="text-xs text-slate-700 leading-relaxed my-1">
                             <FormattedText text={block.content} />
-                          </p>
+                          </div>
                         );
                       })}
                     </React.Fragment>
