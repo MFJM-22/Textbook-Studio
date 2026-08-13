@@ -13,7 +13,7 @@ import {
   LogIn,
   ShieldAlert,
 } from 'lucide-react';
-import { Author, Book, Page, Week, GlossaryTerm } from './types';
+import { Author, Book, Page, Week, GlossaryTerm, ExportTheme } from './types';
 import { Header } from './components/Header';
 import { AuthorProfileModal } from './components/AuthorProfileModal';
 import { BookCard } from './components/BookCard';
@@ -497,13 +497,17 @@ export default function App() {
   const handleDeleteBook = async (bookId: string) => {
     if (!confirm('Are you sure you want to delete this textbook project?')) return;
     try {
-      await fetch(`/api/books/${bookId}`, { method: 'DELETE' });
-      if (currentUser) {
-        await deleteBookFromFirestore(bookId);
-      }
+      await fetch(`/api/books/${bookId}`, { method: 'DELETE' }).catch((err) =>
+        console.warn('Backend API delete notice:', err)
+      );
+      await deleteBookFromFirestore(bookId);
       setBooks((prev) => prev.filter((b) => b.id !== bookId));
+      if (selectedBook?.id === bookId) {
+        setSelectedBook(null);
+      }
     } catch (err) {
       console.error('Error deleting book:', err);
+      setBooks((prev) => prev.filter((b) => b.id !== bookId));
     }
   };
 
@@ -825,13 +829,15 @@ export default function App() {
   };
 
   // DOCX Export Download
-  const handleExportDocx = async (book?: Book) => {
+  const handleExportDocx = async (book?: Book, theme: ExportTheme = 'academic') => {
     const targetBook = book || selectedBook;
     if (!targetBook) return;
 
     try {
       const res = await fetch(`/api/books/${targetBook.id}/generate-docx`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme }),
       });
       if (res.ok) {
         const blob = await res.blob();
@@ -859,7 +865,7 @@ export default function App() {
       const exportGlossary = details?.glossary || glossary || [];
       const safeAuthor = author || { id: '1', name: 'Curriculum Author', credentials: 'B.Ed', bio: 'Textbook author.' };
 
-      const blob = await generateBookDocxBlob(targetBook, safeAuthor, exportWeeks, exportGlossary);
+      const blob = await generateBookDocxBlob(targetBook, safeAuthor, exportWeeks, exportGlossary, theme);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -904,7 +910,7 @@ export default function App() {
         author={author}
         weeks={weeks}
         onBack={() => setCurrentView('dashboard')}
-        onExportDocx={() => handleExportDocx(selectedBook)}
+        onExportDocx={(theme) => handleExportDocx(selectedBook, theme)}
       />
     );
   }

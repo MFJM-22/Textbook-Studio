@@ -113,3 +113,59 @@
   background: rgba(99, 102, 241, 0.4);
 }
 
+/* Markdown Table styling */
+.markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.markdown-table th,
+.markdown-table td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-align: left;
+}
+
+.markdown-table th {
+  font-weight: 600;
+  background-color: rgba(30, 41, 59, 0.9);
+  color: #f8fafc;
+}
+
+.markdown-table tbody tr:nth-child(odd) {
+  background-color: rgba(15, 23, 42, 0.6);
+}
+
+.markdown-table tbody tr:nth-child(even) {
+  background-color: rgba(30, 41, 59, 0.4);
+}
+
+/* Light background override for print/paper preview */
+.bg-white .markdown-table {
+  border-color: #cbd5e1;
+}
+
+.bg-white .markdown-table th {
+  background-color: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.bg-white .markdown-table td {
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.bg-white .markdown-table tbody tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.bg-white .markdown-table tbody tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+

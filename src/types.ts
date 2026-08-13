@@ -1,5 +1,7 @@
 export type BookStatus = 'uploading' | 'ocr_processing' | 'awaiting_review' | 'reviewed' | 'generated';
 
+export type ExportTheme = 'academic' | 'minimalist' | 'creative' | 'modern';
+
 export interface Author {
   id: string;
   name: string;

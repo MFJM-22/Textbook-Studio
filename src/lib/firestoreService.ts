@@ -133,10 +133,37 @@ export function subscribeToBooks(
   }
 }
 
-// Delete Book
+// Delete Book and all nested subcollections
 export async function deleteBookFromFirestore(bookId: string): Promise<void> {
   const path = `books/${bookId}`;
   try {
+    // Delete all subcollection documents (weeks, pages, glossary) first
+    try {
+      const weeksSnap = await getDocs(collection(db, 'books', bookId, 'weeks')).catch(() => null);
+      if (weeksSnap && !weeksSnap.empty) {
+        for (const d of weeksSnap.docs) {
+          await deleteDoc(d.ref).catch(() => null);
+        }
+      }
+
+      const pagesSnap = await getDocs(collection(db, 'books', bookId, 'pages')).catch(() => null);
+      if (pagesSnap && !pagesSnap.empty) {
+        for (const d of pagesSnap.docs) {
+          await deleteDoc(d.ref).catch(() => null);
+        }
+      }
+
+      const glossarySnap = await getDocs(collection(db, 'books', bookId, 'glossary')).catch(() => null);
+      if (glossarySnap && !glossarySnap.empty) {
+        for (const d of glossarySnap.docs) {
+          await deleteDoc(d.ref).catch(() => null);
+        }
+      }
+    } catch (subErr) {
+      console.warn('Subcollection cleanup warning:', subErr);
+    }
+
+    // Delete main book document
     await deleteDoc(doc(db, 'books', bookId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);

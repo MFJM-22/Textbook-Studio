@@ -1,18 +1,46 @@
 import { jsPDF } from 'jspdf';
-import { Author, Book, Week, GlossaryTerm } from '../types';
+import { Author, Book, Week, GlossaryTerm, ExportTheme } from '../types';
 import { parseMarkdownTable, parseParagraphBlocks, normalizeContentSections } from './docGenerator';
+import { cleanPlainText, parseRichTextSegments } from './formatUtils';
 
 export function buildJsPdfDoc(
   book: Book,
   author: Author,
   weeks: Week[],
-  glossary?: GlossaryTerm[]
+  glossary?: GlossaryTerm[],
+  theme: ExportTheme = 'academic'
 ): jsPDF {
   const doc = new jsPDF({
     unit: 'mm',
     format: 'a4',
     orientation: 'portrait',
   });
+
+  // Font setup based on theme
+  const fontMain = theme === 'academic' ? 'times' : 'helvetica';
+
+  // Palette based on theme
+  let primaryRgb = [15, 23, 42]; // Slate 900
+  let accentRgb = [37, 99, 235]; // Blue 600
+  let badgeBgRgb = [239, 246, 255]; // Blue 50
+  let badgeBorderRgb = [191, 219, 254];
+
+  if (theme === 'minimalist') {
+    primaryRgb = [24, 24, 27];
+    accentRgb = [82, 82, 91];
+    badgeBgRgb = [244, 244, 245];
+    badgeBorderRgb = [228, 228, 231];
+  } else if (theme === 'creative') {
+    primaryRgb = [79, 70, 229];
+    accentRgb = [16, 185, 129];
+    badgeBgRgb = [238, 242, 255];
+    badgeBorderRgb = [199, 210, 254];
+  } else if (theme === 'modern') {
+    primaryRgb = [2, 132, 199];
+    accentRgb = [15, 118, 110];
+    badgeBgRgb = [240, 249, 255];
+    badgeBorderRgb = [186, 230, 253];
+  }
 
   const pageWidth = 210;
   const pageHeight = 297;
@@ -246,7 +274,8 @@ export function buildJsPdfDoc(
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(11);
         doc.setTextColor(30, 41, 59);
-        const subLines = doc.splitTextToSize(sec.subheading, contentWidth - 6);
+        const subText = cleanPlainText(sec.subheading);
+        const subLines = doc.splitTextToSize(subText, contentWidth - 6);
         doc.text(subLines, marginLeft + 5, currentY);
         currentY += subLines.length * 5.5 + 4;
       }
@@ -262,14 +291,46 @@ export function buildJsPdfDoc(
               }, checkPageBreak);
               currentY += 6;
             } else if (block.content && block.content.trim()) {
-              doc.setFont('helvetica', 'normal');
-              doc.setFontSize(9.5);
-              doc.setTextColor(51, 65, 85);
-              const pLines = doc.splitTextToSize(block.content, contentWidth);
-              const pHeight = pLines.length * 5;
-              checkPageBreak(pHeight + 2);
-              doc.text(pLines, marginLeft, currentY);
-              currentY += pHeight + 4;
+              const segments = parseRichTextSegments(block.content);
+
+              if (segments.length === 1 && segments[0].isDivider) {
+                checkPageBreak(8);
+                doc.setDrawColor(203, 213, 225);
+                doc.setLineWidth(0.4);
+                doc.line(marginLeft, currentY + 2, pageWidth - marginRight, currentY + 2);
+                currentY += 8;
+              } else {
+                const fullCleanText = segments.map((s) => s.text).join('');
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9.5);
+                doc.setTextColor(51, 65, 85);
+
+                const pLines = doc.splitTextToSize(fullCleanText, contentWidth);
+                const pHeight = pLines.length * 5;
+                checkPageBreak(pHeight + 2);
+
+                let cursorY = currentY;
+                for (const lineText of pLines) {
+                  const firstBold = segments.find((s) => s.bold && lineText.includes(s.text));
+                  if (firstBold && lineText.startsWith(firstBold.text)) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(firstBold.text, marginLeft, cursorY);
+                    const boldWidth = doc.getTextWidth(firstBold.text);
+
+                    const remainder = lineText.substring(firstBold.text.length);
+                    if (remainder) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.text(remainder, marginLeft + boldWidth, cursorY);
+                    }
+                  } else {
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(lineText, marginLeft, cursorY);
+                  }
+                  cursorY += 5;
+                }
+
+                currentY = cursorY + 2;
+              }
             }
           });
         });
@@ -325,9 +386,10 @@ export async function generateBookPdf(
   book: Book,
   author: Author,
   weeks: Week[],
-  glossary?: GlossaryTerm[]
+  glossary?: GlossaryTerm[],
+  theme: ExportTheme = 'academic'
 ): Promise<Buffer> {
-  const doc = buildJsPdfDoc(book, author, weeks, glossary);
+  const doc = buildJsPdfDoc(book, author, weeks, glossary, theme);
   const pdfArrayBuffer = doc.output('arraybuffer');
   return Buffer.from(pdfArrayBuffer);
 }
@@ -336,9 +398,10 @@ export function downloadBookPdfClient(
   book: Book,
   author: Author,
   weeks: Week[],
-  glossary?: GlossaryTerm[]
+  glossary?: GlossaryTerm[],
+  theme: ExportTheme = 'academic'
 ): void {
-  const doc = buildJsPdfDoc(book, author, weeks, glossary);
+  const doc = buildJsPdfDoc(book, author, weeks, glossary, theme);
   const sanitizeFilename = (book.title || 'Textbook').replace(/[^a-zA-Z0-9_\-]/g, '_');
   doc.save(`${sanitizeFilename}.pdf`);
 }
@@ -371,8 +434,9 @@ function renderPdfTable(
   doc.setTextColor(30, 41, 59);
 
   headers.forEach((h, colIdx) => {
+    const cleanH = cleanPlainText(h || '');
     const x = startX + colIdx * colWidth + 2;
-    const truncatedH = doc.splitTextToSize(h || '', colWidth - 4)[0] || '';
+    const truncatedH = doc.splitTextToSize(cleanH, colWidth - 4)[0] || '';
     doc.text(truncatedH, x, currY + 5.5);
   });
 
@@ -392,7 +456,7 @@ function renderPdfTable(
     doc.setTextColor(51, 65, 85);
 
     headers.forEach((_, colIdx) => {
-      const cellText = row[colIdx] || '';
+      const cellText = cleanPlainText(row[colIdx] || '');
       const x = startX + colIdx * colWidth + 2;
       const truncatedCell = doc.splitTextToSize(cellText, colWidth - 4)[0] || cellText;
       doc.text(truncatedCell, x, currY + 5);

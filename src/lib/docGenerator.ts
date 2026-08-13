@@ -14,7 +14,8 @@ import {
   WidthType,
   BorderStyle,
 } from 'docx';
-import { Author, Book, Week, GlossaryTerm } from '../types';
+import { Author, Book, Week, GlossaryTerm, ExportTheme } from '../types';
+import { cleanPlainText, parseRichTextSegments } from './formatUtils';
 
 export interface MarkdownTableData {
   headers: string[];
@@ -28,8 +29,10 @@ export type ParagraphBlock =
 export function parseMarkdownTable(text: string): MarkdownTableData | null {
   if (!text || typeof text !== 'string') return null;
 
-  // 1. Pre-process escaped newlines, carriage returns, and row boundary markers
+  // 1. Pre-process escaped newlines, carriage returns, br tags, and row boundary markers
   let cleanText = text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/&lt;br\s*\/?&gt;/gi, '\n')
     .replace(/\\n/g, '\n')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n');
@@ -56,7 +59,8 @@ export function parseMarkdownTable(text: string): MarkdownTableData | null {
     let cleaned = line.trim();
     if (cleaned.startsWith('|')) cleaned = cleaned.substring(1);
     if (cleaned.endsWith('|')) cleaned = cleaned.substring(0, cleaned.length - 1);
-    return cleaned.split('|').map((cell) => cell.trim());
+    const cells = cleaned.split(/(?<!\\)\|/);
+    return cells.map((cell) => cell.replace(/\\\|/g, '|').replace(/<br\s*\/?>/gi, ' ').replace(/&lt;br\s*\/?&gt;/gi, ' ').trim());
   };
 
   const tableLines = lines.filter((l) => l.includes('|'));
@@ -68,7 +72,7 @@ export function parseMarkdownTable(text: string): MarkdownTableData | null {
     }
 
     const headers = parseRow(tableLines[headerIndex]);
-    if (headers && headers.length > 0 && headers.some((h) => h.length > 0)) {
+    if (headers && headers.length > 0) {
       const rows: string[][] = [];
       for (let i = headerIndex + 1; i < tableLines.length; i++) {
         const rowStr = tableLines[i];
@@ -80,9 +84,7 @@ export function parseMarkdownTable(text: string): MarkdownTableData | null {
           rows.push(cells.slice(0, headers.length));
         }
       }
-      if (rows.length > 0) {
-        return { headers, rows };
-      }
+      return { headers, rows };
     }
   }
 
@@ -144,6 +146,8 @@ export function parseParagraphBlocks(text: string): ParagraphBlock[] {
   }
 
   let cleanText = text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/&lt;br\s*\/?&gt;/gi, '\n')
     .replace(/\\n/g, '\n')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
@@ -268,7 +272,7 @@ export function createDocxTable(tableData: { headers: string[]; rows: string[][]
         new TableCell({
           children: [
             new Paragraph({
-              children: [new TextRun({ text: headerText || '', bold: true, color: '1E293B' })],
+              children: [new TextRun({ text: cleanPlainText(headerText) || '', bold: true, color: '1E293B' })],
               alignment: AlignmentType.LEFT,
             }),
           ],
@@ -288,7 +292,7 @@ export function createDocxTable(tableData: { headers: string[]; rows: string[][]
     (row, rowIndex) =>
       new TableRow({
         children: headers.map((_, colIndex) => {
-          const cellText = row[colIndex] || '';
+          const cellText = cleanPlainText(row[colIndex] || '');
           return new TableCell({
             children: [
               new Paragraph({
@@ -318,9 +322,24 @@ export function buildDocxDocument(
   book: Book,
   author: Author,
   weeks: Week[],
-  glossary?: GlossaryTerm[]
+  glossary?: GlossaryTerm[],
+  theme: ExportTheme = 'academic'
 ): Document {
   const sectionsChildren: (Paragraph | Table)[] = [];
+
+  let primaryColor = '0F172A';
+  let accentColor = '2563EB';
+
+  if (theme === 'minimalist') {
+    primaryColor = '18181B';
+    accentColor = '52525B';
+  } else if (theme === 'creative') {
+    primaryColor = '4F46E5';
+    accentColor = '10B981';
+  } else if (theme === 'modern') {
+    primaryColor = '0284C7';
+    accentColor = '0F766E';
+  }
 
   const safeTitle = book?.title || 'Textbook';
   const safeSubject = book?.subject || 'General';
@@ -476,7 +495,7 @@ export function buildDocxDocument(
       if (sec.subheading) {
         sectionsChildren.push(
           new Paragraph({
-            text: sec.subheading,
+            text: cleanPlainText(sec.subheading),
             heading: HeadingLevel.HEADING_2,
             spacing: { before: 300, after: 200 },
           })
@@ -491,12 +510,29 @@ export function buildDocxDocument(
               sectionsChildren.push(createDocxTable(block.data));
               sectionsChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
             } else if (block.content && block.content.trim()) {
-              sectionsChildren.push(
-                new Paragraph({
-                  children: [new TextRun({ text: block.content, size: 24, color: '334155' })],
-                  spacing: { after: 200 },
-                })
-              );
+              const segments = parseRichTextSegments(block.content);
+
+              if (segments.length === 1 && segments[0].isDivider) {
+                sectionsChildren.push(
+                  new Paragraph({
+                    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'CBD5E1' } },
+                    spacing: { before: 120, after: 120 },
+                  })
+                );
+              } else {
+                const textRuns = segments.map((seg) => new TextRun({
+                  text: seg.text,
+                  bold: !!seg.bold,
+                  size: 24,
+                  color: '334155',
+                }));
+                sectionsChildren.push(
+                  new Paragraph({
+                    children: textRuns,
+                    spacing: { after: 200 },
+                  })
+                );
+              }
             }
           });
         });
@@ -543,9 +579,10 @@ export async function generateBookDocx(
   book: Book,
   author: Author,
   weeks: Week[],
-  glossary?: GlossaryTerm[]
+  glossary?: GlossaryTerm[],
+  theme: ExportTheme = 'academic'
 ): Promise<Buffer> {
-  const doc = buildDocxDocument(book, author, weeks, glossary);
+  const doc = buildDocxDocument(book, author, weeks, glossary, theme);
   return await Packer.toBuffer(doc);
 }
 
@@ -553,8 +590,9 @@ export async function generateBookDocxBlob(
   book: Book,
   author: Author,
   weeks: Week[],
-  glossary?: GlossaryTerm[]
+  glossary?: GlossaryTerm[],
+  theme: ExportTheme = 'academic'
 ): Promise<Blob> {
-  const doc = buildDocxDocument(book, author, weeks, glossary);
+  const doc = buildDocxDocument(book, author, weeks, glossary, theme);
   return await Packer.toBlob(doc);
 }

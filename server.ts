@@ -401,6 +401,7 @@ CRITICAL MANDATES:
 3. EXACT WEEK COUNT: If the uploaded material only covers 1 week (e.g. Week 1), return EXACTLY 1 week in the output array. Do NOT extrapolate or generate extra weeks up to Week 12.
 4. TABLE PRESERVATION: Capture all tables and tabular data as Markdown tables (| Header 1 | Header 2 |\n| --- | --- |\n| Row 1 | Row 2 |).
 5. Keep all lesson content detailed and organized under subheadings based strictly on the source text.
+6. NO HTML TAGS OR DIVIDER STRINGS: Do NOT output raw HTML tags (like <u>, </u>, <b>, </b>, <br>) or standalone divider strings (like ---) in paragraph text. Use clean text.
 
 Structure the extracted notes into an array of Weeks. Each Week must have:
 - week_number (number, e.g. 1, 2, 3...)
@@ -759,7 +760,8 @@ app.post('/api/books/:id/generate-docx', async (req, res) => {
   }
 
   try {
-    const docBuffer = await generateBookDocx(book, currentAuthor, weeks, glossary);
+    const theme = req.body?.theme || 'academic';
+    const docBuffer = await generateBookDocx(book, currentAuthor, weeks, glossary, theme);
 
     book.status = 'generated';
 
@@ -828,8 +830,9 @@ app.post('/api/books/:id/generate-pdf', async (req, res) => {
   }
 
   try {
+    const theme = req.body?.theme || 'academic';
     const { generateBookPdf } = await import('./src/lib/pdfGenerator');
-    const pdfBuffer = await generateBookPdf(book, author, weeks, glossary);
+    const pdfBuffer = await generateBookPdf(book, author, weeks, glossary, theme);
 
     book.status = 'generated';
 

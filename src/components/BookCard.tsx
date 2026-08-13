@@ -108,9 +108,12 @@ export const BookCard: React.FC<BookCardProps> = ({
           </div>
 
           <button
-            onClick={() => onDelete(book.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(book.id);
+            }}
             title="Delete Book"
-            className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+            className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0 cursor-pointer active:scale-95"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -203,8 +206,7 @@ export const BookCard: React.FC<BookCardProps> = ({
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold btn-emerald whitespace-nowrap"
               >
                 <FileDown className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline sm:inline">Word (.docx)</span>
-                <span className="xs:hidden sm:hidden">Word</span>
+                <span>Word</span>
               </button>
             </>
           )}

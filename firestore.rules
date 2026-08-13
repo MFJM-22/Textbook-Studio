@@ -33,11 +33,11 @@ service cloud.firestore {
     }
 
     match /books/{bookId} {
-      allow get: if isSignedIn() && isValidId(bookId) && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(bookId) && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && isValidId(bookId) && resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && isValidId(bookId) && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && isValidId(bookId) && (resource.data.userId == request.auth.uid || resource.data.userId == 'anonymous' || !('userId' in resource.data));
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userId == 'anonymous' || !('userId' in resource.data));
+      allow create: if isSignedIn() && isValidId(bookId);
+      allow update: if isSignedIn() && isValidId(bookId) && (resource.data.userId == request.auth.uid || resource.data.userId == 'anonymous' || !('userId' in resource.data));
+      allow delete: if isSignedIn() && isValidId(bookId) && (resource.data.userId == request.auth.uid || resource.data.userId == 'anonymous' || !('userId' in resource.data));
 
       match /pages/{pageId} {
         allow get, list, create, update, delete: if isSignedIn() && isValidId(bookId);
