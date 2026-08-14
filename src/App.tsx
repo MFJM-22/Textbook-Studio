@@ -22,6 +22,7 @@ import { OCRViewerModal } from './components/OCRViewerModal';
 import { HumanReviewEditor } from './components/HumanReviewEditor';
 import { PrintPDFPreview } from './components/PrintPDFPreview';
 import { AuthModal } from './components/AuthModal';
+import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { LandingPage } from './components/LandingPage';
 import { Footer } from './components/Footer';
 import { generateBookDocxBlob } from './lib/docGenerator';
@@ -206,6 +207,8 @@ export default function App() {
   const [isAuthorModalOpen, setIsAuthorModalOpen] = useState(false);
   const [isNewBookModalOpen, setIsNewBookModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [bookToDelete, setBookToDelete] = useState<Book | null>(null);
+  const [isDeletingBook, setIsDeletingBook] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -494,20 +497,41 @@ export default function App() {
   };
 
   // Delete Book
-  const handleDeleteBook = async (bookId: string) => {
-    if (!confirm('Are you sure you want to delete this textbook project?')) return;
+  const handleRequestDeleteBook = (book: Book) => {
+    setBookToDelete(book);
+  };
+
+  const handleConfirmDeleteBook = async () => {
+    if (!bookToDelete) return;
+    const bookId = bookToDelete.id;
+    setIsDeletingBook(true);
+
     try {
+      // 1. Delete from backend API
       await fetch(`/api/books/${bookId}`, { method: 'DELETE' }).catch((err) =>
         console.warn('Backend API delete notice:', err)
       );
-      await deleteBookFromFirestore(bookId);
+
+      // 2. Delete from Firestore if signed in
+      try {
+        await deleteBookFromFirestore(bookId);
+      } catch (fsErr) {
+        console.warn('Firestore deletion error:', fsErr);
+      }
+
+      // 3. Immediately remove from local state
       setBooks((prev) => prev.filter((b) => b.id !== bookId));
       if (selectedBook?.id === bookId) {
         setSelectedBook(null);
       }
+
+      setBookToDelete(null);
     } catch (err) {
       console.error('Error deleting book:', err);
       setBooks((prev) => prev.filter((b) => b.id !== bookId));
+      setBookToDelete(null);
+    } finally {
+      setIsDeletingBook(false);
     }
   };
 
@@ -876,7 +900,6 @@ export default function App() {
       window.URL.revokeObjectURL(url);
     } catch (clientErr) {
       console.error('Client-side DOCX export error:', clientErr);
-      alert('Unable to generate Word document. Please try again or check note contents.');
     } finally {
       setIsLoading(false);
     }
@@ -938,14 +961,6 @@ export default function App() {
             setIsNewBookModalOpen(true);
           }
         }}
-        onLoadSample={() => {
-          if (!currentUser) {
-            setIsAuthModalOpen(true);
-          } else {
-            setShowLandingPage(false);
-            setIsNewBookModalOpen(true);
-          }
-        }}
         onOpenAuth={() => setIsAuthModalOpen(true)}
       />
 
@@ -961,14 +976,6 @@ export default function App() {
             }
           }}
           onOpenAuth={() => setIsAuthModalOpen(true)}
-          onLoadSample={() => {
-            if (!currentUser) {
-              setIsAuthModalOpen(true);
-            } else {
-              setShowLandingPage(false);
-              setIsNewBookModalOpen(true);
-            }
-          }}
         />
       ) : (
         /* Main Teacher Dashboard */
@@ -1038,7 +1045,7 @@ export default function App() {
                     onExportDocx={() => handleExportDocx(book)}
                     onDownloadPdf={() => handleDownloadPdf(book)}
                     onPrintPreview={() => handleOpenPrintView(book)}
-                    onDelete={handleDeleteBook}
+                    onDelete={handleRequestDeleteBook}
                   />
                 ))}
               </div>
@@ -1083,6 +1090,19 @@ export default function App() {
         isOpen={isNewBookModalOpen}
         onClose={() => setIsNewBookModalOpen(false)}
         onCreateBook={handleCreateBook}
+      />
+
+      {/* Delete Book Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!bookToDelete}
+        title="Delete Textbook Project"
+        itemName={bookToDelete?.title}
+        message="Are you sure you want to permanently delete this textbook project? All scanned notes, curriculum structures, and exports will be deleted. This cannot be undone."
+        isDeleting={isDeletingBook}
+        onConfirm={handleConfirmDeleteBook}
+        onCancel={() => {
+          if (!isDeletingBook) setBookToDelete(null);
+        }}
       />
 
       {/* OCR Page Viewer Modal */}

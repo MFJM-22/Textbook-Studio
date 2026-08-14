@@ -33,7 +33,7 @@ function getGenAI(): GoogleGenAI {
   return genAIInstance;
 }
 
-// In-Memory Database Store
+// In-Memory Database Store (Clean state, no mock data)
 let currentAuthor: Author = {
   id: 'author-1',
   name: '',
@@ -50,22 +50,21 @@ let pagesStore: Page[] = [];
 let weeksStore: Week[] = [];
 let glossaryStore: GlossaryTerm[] = [];
 
-// Helper to retrieve or lazily create a book in memory so endpoints never return 404 for dynamic IDs
+// Helper to retrieve existing book or create an ephemeral object without polluting booksStore
 function getOrCreateBook(id: string, meta?: Partial<Book>): Book {
   let book = booksStore.find((b) => b.id === id);
   if (!book) {
     book = {
       id,
       author_id: currentAuthor.id,
-      title: meta?.title || 'Integrated Science Textbook',
-      subject: meta?.subject || 'Science',
-      class_level: meta?.class_level || 'JSS 2',
+      title: meta?.title || 'Textbook',
+      subject: meta?.subject || 'General',
+      class_level: meta?.class_level || 'Grade 1',
       term: meta?.term || '1st Term',
       status: meta?.status || 'uploading',
       created_at: new Date().toISOString(),
       pages_count: 0,
     };
-    booksStore.unshift(book);
   }
   return book;
 }
@@ -214,17 +213,18 @@ app.post('/api/books', (req, res) => {
 
 app.get('/api/books/:id', (req, res) => {
   try {
-    const book = getOrCreateBook(req.params.id);
+    const existingBook = booksStore.find((b) => b.id === req.params.id);
+    const book = existingBook || getOrCreateBook(req.params.id);
 
     const pages = (pagesStore || [])
-      .filter((p) => p.book_id === book.id)
+      .filter((p) => p.book_id === req.params.id)
       .sort((a, b) => a.page_order - b.page_order);
 
     const weeks = (weeksStore || [])
-      .filter((w) => w.book_id === book.id)
+      .filter((w) => w.book_id === req.params.id)
       .sort((a, b) => a.week_number - b.week_number);
 
-    const glossary = (glossaryStore || []).filter((g) => g.book_id === book.id);
+    const glossary = (glossaryStore || []).filter((g) => g.book_id === req.params.id);
 
     res.json({
       ...book,

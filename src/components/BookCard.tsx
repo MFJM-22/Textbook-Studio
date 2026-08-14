@@ -22,7 +22,7 @@ interface BookCardProps {
   onExportDocx: (book: Book) => void;
   onDownloadPdf: (book: Book) => void;
   onPrintPreview: (book: Book) => void;
-  onDelete: (bookId: string) => void;
+  onDelete: (book: Book) => void;
 }
 
 const statusBadges: Record<
@@ -110,12 +110,14 @@ export const BookCard: React.FC<BookCardProps> = ({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onDelete(book.id);
+              onDelete(book);
             }}
-            title="Delete Book"
-            className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0 cursor-pointer active:scale-95"
+            id={`delete-book-${book.id}`}
+            title={`Delete ${book.title}`}
+            aria-label={`Delete ${book.title}`}
+            className="text-slate-400 hover:text-red-400 p-2 rounded-xl hover:bg-red-500/15 border border-transparent hover:border-red-500/30 transition-all shrink-0 cursor-pointer active:scale-95 group/del"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-4 h-4 transition-transform group-hover/del:scale-110" />
           </button>
         </div>
 

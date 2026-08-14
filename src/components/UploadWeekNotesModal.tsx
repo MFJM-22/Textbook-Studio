@@ -23,6 +23,7 @@ export const UploadWeekNotesModal: React.FC<UploadWeekNotesModalProps> = ({
   const [items, setItems] = useState<PageUploadItem[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [customTopic, setCustomTopic] = useState<string>(`Week ${nextWeekNumber} Lesson Unit`);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,6 +33,7 @@ export const UploadWeekNotesModal: React.FC<UploadWeekNotesModalProps> = ({
     const files = Array.from(e.target.files || []) as File[];
     if (files.length === 0) return;
 
+    setErrorMsg(null);
     setIsProcessing(true);
     setStatusMsg('Processing scanned notes & PDF pages...');
     try {
@@ -39,7 +41,7 @@ export const UploadWeekNotesModal: React.FC<UploadWeekNotesModalProps> = ({
       setItems((prev) => [...prev, ...processed]);
     } catch (err) {
       console.error('File process error:', err);
-      alert('Unable to process uploaded notes. Please try uploading JPEG, PNG, or PDF files.');
+      setErrorMsg('Unable to process uploaded notes. Please try uploading JPEG, PNG, or PDF files.');
     } finally {
       setIsProcessing(false);
       setStatusMsg('');
@@ -51,6 +53,7 @@ export const UploadWeekNotesModal: React.FC<UploadWeekNotesModalProps> = ({
     const files = Array.from(e.dataTransfer.files || []) as File[];
     if (files.length === 0) return;
 
+    setErrorMsg(null);
     setIsProcessing(true);
     setStatusMsg('Processing scanned notes & PDF pages...');
     try {
@@ -58,7 +61,7 @@ export const UploadWeekNotesModal: React.FC<UploadWeekNotesModalProps> = ({
       setItems((prev) => [...prev, ...processed]);
     } catch (err) {
       console.error('File process error:', err);
-      alert('Unable to process uploaded notes.');
+      setErrorMsg('Unable to process uploaded notes.');
     } finally {
       setIsProcessing(false);
       setStatusMsg('');
@@ -67,10 +70,11 @@ export const UploadWeekNotesModal: React.FC<UploadWeekNotesModalProps> = ({
 
   const handleTranscribeAndBuildWeek = async () => {
     if (items.length === 0) {
-      alert('Please select or upload at least one scanned note page or image.');
+      setErrorMsg('Please select or upload at least one scanned note page or image.');
       return;
     }
 
+    setErrorMsg(null);
     setIsProcessing(true);
     setStatusMsg(`Transcribing scanned notes for Week ${nextWeekNumber} using Gemini Vision AI...`);
 
@@ -149,9 +153,7 @@ export const UploadWeekNotesModal: React.FC<UploadWeekNotesModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error('OCR / Transcribe week error:', err);
-      alert('An error occurred while processing scanned notes. Adding a blank week structure instead.');
-      onAddBlankWeek();
-      onClose();
+      setErrorMsg('An error occurred while processing notes. You can retry or click Add Blank Week.');
     } finally {
       setIsProcessing(false);
       setStatusMsg('');
@@ -187,6 +189,18 @@ export const UploadWeekNotesModal: React.FC<UploadWeekNotesModalProps> = ({
 
         {/* Content Body */}
         <div className="p-6 space-y-5 text-xs">
+          {errorMsg && (
+            <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-red-300 flex items-center justify-between text-xs">
+              <span>{errorMsg}</span>
+              <button
+                type="button"
+                onClick={() => setErrorMsg(null)}
+                className="text-red-400 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <div>
             <label className="block font-bold text-slate-300 mb-1.5">
               Week Topic / Title

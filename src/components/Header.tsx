@@ -7,7 +7,6 @@ interface HeaderProps {
   author: Author;
   onOpenAuthorProfile: () => void;
   onNewBook: () => void;
-  onLoadSample: () => void;
   onOpenAuth: () => void;
   showLandingPage: boolean;
   onToggleLandingPage: (showLanding: boolean) => void;

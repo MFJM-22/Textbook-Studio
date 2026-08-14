@@ -24,7 +24,6 @@ import {
 interface LandingPageProps {
   onGetStarted: () => void;
   onOpenAuth: () => void;
-  onLoadSample: () => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({

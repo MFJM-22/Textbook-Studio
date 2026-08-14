@@ -36,6 +36,7 @@ import {
 } from '../lib/docGenerator';
 import { FormattedText } from '../lib/formatUtils';
 import { UploadWeekNotesModal } from './UploadWeekNotesModal';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 export interface DetectedTableInfo {
   index: number;
@@ -484,6 +485,13 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
   const [selectedWeekIds, setSelectedWeekIds] = useState<string[]>([]);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
   const [shortcutToast, setShortcutToast] = useState<string | null>(null);
+  const [deleteModalConfig, setDeleteModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    itemName?: string;
+    message?: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Global Keyboard Shortcuts Listener (Ctrl+S, Ctrl+P, Ctrl+E, Ctrl+K, Esc)
   useEffect(() => {
@@ -554,20 +562,25 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
     if (selectedWeekIds.length === 0) return;
 
     if (selectedWeekIds.length >= weeksList.length) {
-      alert('A textbook curriculum must contain at least one week. Please leave at least one week.');
+      setShortcutToast('A textbook curriculum must contain at least one week.');
+      setTimeout(() => setShortcutToast(null), 3000);
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete ${selectedWeekIds.length} selected week(s)?`)) {
-      return;
-    }
-
-    const updated = weeksList.filter((w) => !selectedWeekIds.includes(w.id));
-    const renumbered = updated.map((w, i) => ({ ...w, week_number: i + 1 }));
-
-    setWeeksList(renumbered);
-    setSelectedWeekIds([]);
-    setSelectedWeekIndex(0);
+    setDeleteModalConfig({
+      isOpen: true,
+      title: 'Delete Selected Weeks',
+      itemName: `${selectedWeekIds.length} week(s) selected`,
+      message: `Are you sure you want to delete these ${selectedWeekIds.length} selected week(s)? The remaining curriculum will be re-sequenced automatically.`,
+      onConfirm: () => {
+        const updated = weeksList.filter((w) => !selectedWeekIds.includes(w.id));
+        const renumbered = updated.map((w, i) => ({ ...w, week_number: i + 1 }));
+        setWeeksList(renumbered);
+        setSelectedWeekIds([]);
+        setSelectedWeekIndex(0);
+        setDeleteModalConfig(null);
+      },
+    });
   };
 
   // Sync weeks state if incoming prop updates initially or if book ID changes
@@ -629,14 +642,24 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
 
   const handleDeleteWeek = (index: number) => {
     if (weeksList.length <= 1) {
-      alert('A textbook curriculum must contain at least one week.');
+      setShortcutToast('A textbook curriculum must contain at least one week.');
+      setTimeout(() => setShortcutToast(null), 3000);
       return;
     }
-    const updated = weeksList.filter((_, i) => i !== index);
-    // re-number
-    const renumbered = updated.map((w, i) => ({ ...w, week_number: i + 1 }));
-    setWeeksList(renumbered);
-    setSelectedWeekIndex(Math.max(0, index - 1));
+    const targetWeek = weeksList[index];
+    setDeleteModalConfig({
+      isOpen: true,
+      title: `Delete Week ${targetWeek.week_number}`,
+      itemName: targetWeek.topic,
+      message: `Are you sure you want to delete Week ${targetWeek.week_number}? The remaining weeks will be automatically re-sequenced.`,
+      onConfirm: () => {
+        const updated = weeksList.filter((_, i) => i !== index);
+        const renumbered = updated.map((w, i) => ({ ...w, week_number: i + 1 }));
+        setWeeksList(renumbered);
+        setSelectedWeekIndex(Math.max(0, index - 1));
+        setDeleteModalConfig(null);
+      },
+    });
   };
 
   const handleMoveWeek = (index: number, direction: 'up' | 'down') => {
@@ -657,7 +680,8 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
   const handleSplitWeek = (weekIndex: number) => {
     const w = weeksList[weekIndex];
     if (!w || w.content_json.length < 2) {
-      alert('Week needs at least 2 content sections to split into two separate weeks.');
+      setShortcutToast('Week needs at least 2 content sections to split into separate weeks.');
+      setTimeout(() => setShortcutToast(null), 3000);
       return;
     }
 
@@ -729,7 +753,8 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
   const handleDeleteSection = (sIndex: number) => {
     if (!currentWeek) return;
     if (currentWeek.content_json.length <= 1) {
-      alert('A week must contain at least one lesson section.');
+      setShortcutToast('A week must contain at least one lesson section.');
+      setTimeout(() => setShortcutToast(null), 3000);
       return;
     }
     const newContent = currentWeek.content_json.filter((_, i) => i !== sIndex);
@@ -1438,6 +1463,18 @@ export const HumanReviewEditor: React.FC<HumanReviewEditorProps> = ({
         onWeekCreated={handleWeekCreated}
         onAddBlankWeek={handleAddBlankWeek}
       />
+
+      {/* In-Editor Delete Confirmation Modal */}
+      {deleteModalConfig && (
+        <DeleteConfirmModal
+          isOpen={deleteModalConfig.isOpen}
+          title={deleteModalConfig.title}
+          itemName={deleteModalConfig.itemName}
+          message={deleteModalConfig.message}
+          onConfirm={deleteModalConfig.onConfirm}
+          onCancel={() => setDeleteModalConfig(null)}
+        />
+      )}
     </div>
   );
 };

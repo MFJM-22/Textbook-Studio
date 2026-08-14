@@ -19,6 +19,7 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
   const [credentials, setCredentials] = useState(author.credentials);
   const [bio, setBio] = useState(author.bio);
   const [photoUrl, setPhotoUrl] = useState(author.photo_url || '');
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -27,9 +28,10 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        alert('Please select an image smaller than 5MB.');
+        setError('Please select an image smaller than 5MB.');
         return;
       }
+      setError(null);
       const reader = new FileReader();
       reader.onload = (evt) => {
         if (evt.target?.result) {
@@ -71,6 +73,18 @@ export const AuthorProfileModal: React.FC<AuthorProfileModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+          {error && (
+            <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-red-300 flex items-center justify-between text-xs">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <div>
             <label className="block font-bold text-slate-300 mb-1.5">Author Name</label>
             <input
